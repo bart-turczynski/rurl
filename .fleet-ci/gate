@@ -1,0 +1,844 @@
+#!/usr/bin/env python3
+"""bin/gate: the fleet's local gate runner, T0 docs and T1 full (seor ADR 0012).
+
+    gate [OPTIONS] docs|full|auto [--sha SHA] [--base SHA]
+    gate [OPTIONS] pre-push REMOTE [URL]     reads git's pre-push lines on stdin
+    gate --version
+
+OPTIONS: --repo DIR (default: the current repository), --dev (allow
+FLEET_CI_IMAGE_OVERRIDE while the vendored digest is published).
+
+`auto` classifies SHA against BASE with bin/classify. BASE defaults to the
+merge-base of SHA with the target, refs/remotes/<remote>/<default branch>
+(remote: PRE_COMMIT_REMOTE_NAME, else origin); when that is unknown the
+tier is full. SHA defaults to HEAD (under pre-commit, PRE_COMMIT_TO_REF:
+that one ref only, so the supported wiring is `pre-push`, through
+.fleet-ci/pre-push).
+
+What one run does, in order:
+  - drops inherited GIT_*, R_PROFILE_USER, R_ENVIRON_USER and R_LIBS*, before
+    it resolves the repository;
+  - reads .fleet-ci.yml, .fleet-ci/images, .fleet-ci/VERSION and
+    .gitlab-ci.yml from the pushed commit, and refuses when VERSION is not
+    the fleet-ci `ref:` the include pins, or when .fleet-ci.yml's `variant`
+    is not .gitlab-ci.yml's FLEET_RELEASE_VARIANT (both default fleet-r);
+  - pulls the vendored image by digest when the local Docker lacks it;
+  - exports the pushed commit's tree, blob by blob (no .gitattributes
+    export-ignore or export-subst), into a fresh temporary directory: no
+    .git, no untracked or ignored file reaches the container, which runs as
+    the invoking user;
+  - full tier: deletes .fleet-ci.yml's exclude_tests from the export (never
+    from the repository), and runs its host_gates (they need history) in a
+    detached worktree of the pushed commit;
+  - resolves the dependencies in the container and looks up the pass stamp,
+    keyed on tree, tier, CLASSIFIER_VERSION, image and the resolved lock;
+  - runs the tier in the container (bin/gate-run.R) from the image named in
+    .fleet-ci/images, with NOT_CRAN=true, both incoming checks off and the
+    pak download cache volume for that R version, architecture and variant,
+    held under a lock;
+  - fails on any failed gate, a check without a `Status:` line or with a
+    non-zero exit, an ERROR or WARNING, a missing testthat summary, and any
+    skip whose reason is not on .fleet-ci.yml's allowed_skips;
+  - after a pass, writes the stamp under $(git rev-parse --git-common-dir)/verify-pass.
+
+Before the digests are published, FLEET_CI_IMAGE_OVERRIDE=<local tag> names
+the image; it is refused once a digest is published unless --dev is given.
+FLEET_GATE_KEEP=<dir> keeps a copy of the container's output (status.json,
+pkg.lock, the .Rcheck directory) under <dir>/<sha>-<tier> for inspection.
+Exit 0 on a pass or a stamp hit, 1 on a failure, 2 on a usage or setup error.
+"""
+
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+# bin/classify is loaded as a module below; write no __pycache__ next to it
+# (in a package, that would be an untracked file in .fleet-ci/).
+sys.dont_write_bytecode = True
+GATE_VERSION = "2"
+FLEET_PROJECT = "bart-turczynski/fleet-ci"
+VARIANT_VARS = {"fleet-r": "FLEET_IMAGE_R_RELEASE", "fleet-r-idn2": "FLEET_IMAGE_IDN2_RELEASE"}
+SCRUB_EXACT = ("R_PROFILE_USER", "R_ENVIRON_USER")
+SCRUB_PREFIXES = ("GIT_", "R_LIBS")
+# The check's behavior, set here and nowhere else.
+CHECK_ENV = {
+    "NOT_CRAN": "true",
+    "_R_CHECK_CRAN_INCOMING_": "false",
+    "_R_CHECK_CRAN_INCOMING_REMOTE_": "false",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+}
+SUMMARY_RE = re.compile(r"\[ FAIL (\d+) \| WARN (\d+) \| SKIP (\d+) \| PASS (\d+) \]")
+ZEROS = re.compile(r"^0+$")
+
+
+def _load_classify():
+    path = os.path.join(HERE, "classify")
+    loader = importlib.machinery.SourceFileLoader("fleet_classify", path)
+    spec = importlib.util.spec_from_loader("fleet_classify", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+classify = _load_classify()
+
+
+class GateError(Exception):
+    """A setup or usage error: exit 2."""
+
+
+def say(msg):
+    print("gate: %s" % msg, file=sys.stderr, flush=True)
+
+
+def loud(lines):
+    bar = "!" * 72
+    print("\n".join([bar] + ["!! " + l for l in lines] + [bar]), file=sys.stderr, flush=True)
+
+
+# --- environment ------------------------------------------------------------------
+
+
+def scrub_env(env):
+    """Drop what a hook or a shell hands down that could steer git or R."""
+    dropped = []
+    for k in list(env):
+        if k in SCRUB_EXACT or k.startswith(SCRUB_PREFIXES):
+            dropped.append(k)
+            del env[k]
+    return sorted(dropped)
+
+
+def docker_bin():
+    return os.environ.get("FLEET_CI_DOCKER", "docker")
+
+
+# --- git ---------------------------------------------------------------------------
+
+
+def git(repo, *args, check=True, binary=False):
+    res = subprocess.run(["git", "-C", repo] + list(args), capture_output=True, check=False)
+    if check and res.returncode != 0:
+        raise GateError("git %s: %s" % (" ".join(args), res.stderr.decode(errors="replace").strip()))
+    if binary:
+        return res
+    return res.stdout.decode().strip() if res.returncode == 0 else None
+
+
+def is_zero(sha):
+    return bool(ZEROS.match(sha or ""))
+
+
+def show(repo, sha, path):
+    res = git(repo, "show", "%s:%s" % (sha, path), check=False, binary=True)
+    return res.stdout.decode() if res.returncode == 0 else None
+
+
+def default_branch(repo, remote):
+    ref = git(repo, "symbolic-ref", "--quiet", "refs/remotes/%s/HEAD" % remote, check=False)
+    if ref:
+        return ref.rsplit("/", 1)[-1]
+    return "main"
+
+
+def target_base(repo, sha, remote):
+    """The tier base: SHA's merge-base with the target, refs/remotes/REMOTE/<default
+    branch> (ADR 0012: the pushed diff against the target). "" when unknown, which
+    classifies as full."""
+    target = "refs/remotes/%s/%s" % (remote, default_branch(repo, remote))
+    if git(repo, "rev-parse", "--verify", "--quiet", target + "^{commit}", check=False) is None:
+        return ""
+    return git(repo, "merge-base", sha, target, check=False) or ""
+
+
+def release_variant(data):
+    """The consumer's FLEET_RELEASE_VARIANT (top-level variables), default fleet-r."""
+    variables = data.get("variables") if isinstance(data, dict) else None
+    value = variables.get("FLEET_RELEASE_VARIANT") if isinstance(variables, dict) else None
+    if isinstance(value, dict):
+        value = value.get("value")
+    return str(value) if value is not None else "fleet-r"
+
+
+def check_pin(repo, sha, dev, variant="fleet-r"):
+    """.fleet-ci/VERSION must be the fleet-ci SHA the .gitlab-ci.yml include pins,
+    and .fleet-ci.yml's VARIANT the release variant .gitlab-ci.yml sets."""
+    version = (show(repo, sha, ".fleet-ci/VERSION") or "").strip()
+    text = show(repo, sha, ".gitlab-ci.yml")
+    if text is None:
+        raise GateError("%s has no .gitlab-ci.yml, so no fleet-ci pin to check .fleet-ci/VERSION against" % sha[:12])
+    res = subprocess.run([os.path.join(HERE, "yaml2json"), "-"], input=text,
+                         capture_output=True, text=True, check=False)
+    if res.returncode != 0:
+        raise GateError(".gitlab-ci.yml: %s" % res.stderr.strip())
+    data = json.loads(res.stdout)
+    ci_variant = release_variant(data)
+    if ci_variant != variant:
+        raise GateError(
+            ".fleet-ci.yml variant is %s, but .gitlab-ci.yml sets FLEET_RELEASE_VARIANT %s "
+            "(both default to fleet-r): make them name the same image" % (variant, ci_variant)
+        )
+    inc = data.get("include") if isinstance(data, dict) else None
+    inc = [inc] if isinstance(inc, dict) else (inc if isinstance(inc, list) else [])
+    refs = [str(e.get("ref")) for e in inc if isinstance(e, dict) and e.get("project") == FLEET_PROJECT]
+    if len(refs) != 1:
+        raise GateError(".gitlab-ci.yml has %d includes of %s; want one, pinned by SHA" % (len(refs), FLEET_PROJECT))
+    if version == refs[0]:
+        return
+    msg = (".fleet-ci/VERSION is %r, but .gitlab-ci.yml includes fleet-ci at %s: re-run bin/vendor "
+           "from a clean fleet-ci checkout at that SHA" % (version, refs[0]))
+    if not dev:
+        raise GateError(msg)
+    loud([msg, "--dev: running anyway; a pass here is a development result only."])
+
+
+# --- push shape ---------------------------------------------------------------------
+
+
+def parse_push_lines(text):
+    refs = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split()
+        if len(parts) != 4:
+            raise GateError("unexpected pre-push line %r" % line)
+        refs.append(dict(zip(("local_ref", "local_sha", "remote_ref", "remote_sha"), parts)))
+    return refs
+
+
+def check_push_shape(repo, remote, refs, main):
+    """The two pushes to main the gate refuses outright. Returns problems."""
+    target = "refs/heads/%s" % main
+    to_main = [r for r in refs if r["remote_ref"] == target and not is_zero(r["local_sha"])]
+    problems = []
+    if len(to_main) > 1:
+        problems.append("the push carries %d refs to %s; push one at a time" % (len(to_main), main))
+    for r in to_main:
+        known = not is_zero(r["remote_sha"]) and git(
+            repo, "cat-file", "-e", r["remote_sha"] + "^{commit}", check=False
+        ) is not None
+        if not known:
+            excl = ["--not", "--remotes=%s" % remote]
+        else:
+            excl = ["^" + r["remote_sha"]]
+        merges = git(repo, "rev-list", "--first-parent", "--merges", r["local_sha"], *excl)
+        n = len(merges.split()) if merges else 0
+        if n > 1:
+            problems.append(
+                "the push to %s adds %d first-parent merges; land one merge per push" % (main, n)
+            )
+    return problems
+
+
+# --- images -------------------------------------------------------------------------
+
+
+def parse_images(text):
+    out = {}
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        k, sep, v = line.partition("=")
+        if not sep or not re.match(r"^FLEET_IMAGE_[A-Z0-9_]+$", k) or not v:
+            raise GateError(".fleet-ci/images: malformed line %r" % line)
+        out[k] = v
+    return out
+
+
+def choose_image(images, variant, override, dev):
+    """(image, identity, is_override). The vendored digest unless overridden."""
+    var = VARIANT_VARS[variant]
+    if var not in images:
+        raise GateError(".fleet-ci/images has no %s (variant %s); re-run bin/vendor" % (var, variant))
+    ref = images[var]
+    published = "UNPUBLISHED-" not in ref and re.search(r"@sha256:[0-9a-f]{64}$", ref) is not None
+    if override:
+        if published and not dev:
+            raise GateError(
+                "FLEET_CI_IMAGE_OVERRIDE=%s, but %s is published (%s); pass --dev to override it"
+                % (override, var, ref)
+            )
+        return override, "override:" + override, True
+    if not published:
+        raise GateError(
+            "%s is %s: no digest is published yet. For development set "
+            "FLEET_CI_IMAGE_OVERRIDE=<local tag>, e.g. fleet-r:4.6.1-20261029" % (var, ref)
+        )
+    return ref, ref.rsplit("@", 1)[1], False
+
+
+def _inspect(image):
+    return subprocess.run(
+        [docker_bin(), "image", "inspect", "--format",
+         "{{.Id}} {{.Architecture}} {{range .Config.Env}}{{println .}}{{end}}", image],
+        capture_output=True, text=True, check=False,
+    )
+
+
+def image_facts(image, pull=False):
+    """(identity suffix, R version, architecture) from docker image inspect.
+    PULL: a vendored digest the local Docker lacks is pulled first."""
+    res = _inspect(image)
+    if res.returncode != 0 and pull:
+        say("%s is not in the local Docker; pulling it by digest" % image)
+        p = subprocess.run([docker_bin(), "pull", image], stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, check=False)
+        if p.returncode != 0:
+            raise GateError(
+                "docker pull %s failed: %s\n  fleet-ci's registry is private (seor ADR 0013): run "
+                "`docker login registry.gitlab.com` with a personal access token that has "
+                "read_registry, then push again" % (image, (p.stderr or p.stdout).strip())
+            )
+        res = _inspect(image)
+    if res.returncode != 0:
+        raise GateError("docker image inspect %s: %s" % (image, res.stderr.strip()))
+    first, _, rest = res.stdout.partition(" ")
+    arch, _, envs = rest.partition(" ")
+    rver = "unknown"
+    for line in envs.splitlines():
+        if line.startswith("FLEET_R_VERSION="):
+            rver = line.split("=", 1)[1]
+    return first.strip(), rver, arch.strip()
+
+
+def cache_volume(rver, arch, variant):
+    clean = lambda s: re.sub(r"[^A-Za-z0-9_.-]", "_", s)  # noqa: E731
+    return "fleet-ci-pak-%s-%s-%s" % (clean(rver), clean(arch), clean(variant))
+
+
+class CacheLock:
+    """mkdir lock per cache volume, so two runs never write one cache at once."""
+
+    def __init__(self, name, root=None, timeout=3600):
+        root = root or os.path.join(os.path.expanduser("~"), ".cache", "fleet-ci", "locks")
+        os.makedirs(root, exist_ok=True)
+        self.path = os.path.join(root, name + ".lock")
+        self.timeout = timeout
+
+    def _stale(self):
+        try:
+            with open(os.path.join(self.path, "pid"), encoding="utf-8") as fh:
+                pid = int(fh.read().strip())
+            os.kill(pid, 0)
+            return False
+        except (OSError, ValueError):
+            return True
+
+    def _take_over(self, st):
+        """Move the stale lock ST aside under a unique name, then remove it. The
+        rename is atomic: of two runs taking it over, one renames it and the
+        other's rename fails, and both go back to mkdir. A rename that caught a
+        lock taken in between (another inode) puts it back."""
+        grave = "%s.stale-%d-%d" % (self.path, os.getpid(), time.monotonic_ns())
+        try:
+            os.rename(self.path, grave)
+        except OSError:
+            return
+        moved = os.stat(grave)
+        if (moved.st_dev, moved.st_ino) != (st.st_dev, st.st_ino):
+            try:
+                os.rename(grave, self.path)
+            except OSError:
+                pass
+            return
+        shutil.rmtree(grave, ignore_errors=True)
+
+    def __enter__(self):
+        start = time.time()
+        told = False
+        while True:
+            try:
+                os.mkdir(self.path)
+                with open(os.path.join(self.path, "pid"), "w", encoding="utf-8") as fh:
+                    fh.write(str(os.getpid()))
+                return self
+            except FileExistsError:
+                try:
+                    st = os.stat(self.path)
+                    age = time.time() - os.path.getmtime(self.path)
+                except FileNotFoundError:
+                    continue  # the holder released it: retry
+                if self._stale() and age > 5:
+                    self._take_over(st)
+                    continue
+                if time.time() - start > self.timeout:
+                    raise GateError("timed out waiting for the cache lock %s" % self.path)
+                if not told:
+                    say("waiting for the cache lock %s" % self.path)
+                    told = True
+                time.sleep(1)
+
+    def __exit__(self, *exc):
+        shutil.rmtree(self.path, ignore_errors=True)
+
+
+def host_user():
+    """uid:gid of the invoking user: the container runs as it, so nothing it
+    writes to /out or /src is root-owned on the host."""
+    return "%d:%d" % (os.getuid(), os.getgid())
+
+
+def own_cache_cmd(image, volume, user):
+    """A root one-off that hands the pak cache volume to USER (a new named
+    volume is root-owned; one written before the gate ran as the user is too)."""
+    script = '[ "$(stat -c %u:%g /pak-cache)" = "$1" ] || chown -R "$1" /pak-cache'
+    return [docker_bin(), "run", "--rm", "--user", "0:0", "-v", "%s:/pak-cache" % volume,
+            "--entrypoint", "sh", image, "-c", script, "sh", user]
+
+
+def docker_run_cmd(image, src, out, step, volume, readonly_src=False, user=None):
+    """The one docker command a step runs; every check setting is here."""
+    cmd = [docker_bin(), "run", "--rm", "--init",
+           "--user", user or host_user(),
+           # The user has no passwd entry, so no home of its own.
+           "-e", "HOME=/tmp",
+           "-v", "%s:/src%s" % (src, ":ro" if readonly_src else ""),
+           "-v", "%s:/out" % out,
+           "-v", "%s:/fleet/gate-run.R:ro" % os.path.join(HERE, "gate-run.R"),
+           "-v", "%s:/pak-cache" % volume,
+           "-e", "R_PKG_CACHE_DIR=/pak-cache",
+           # The image's apt layer is the whole system layer (as in its build).
+           "-e", "PKG_SYSREQS=false"]
+    for k, v in sorted(CHECK_ENV.items()):
+        cmd += ["-e", "%s=%s" % (k, v)]
+    cmd += ["-w", "/src", image, "fleet-tools", "Rscript", "/fleet/gate-run.R", step]
+    return cmd
+
+
+# --- export and exclusions -------------------------------------------------------------
+
+
+def export_tree(repo, sha, dest):
+    """SHA's tree into DEST, blob by blob: exactly the commit's tracked files.
+
+    Not `git archive`, which applies .gitattributes export-ignore and
+    export-subst, so the container would check another tree than the one
+    pushed. Nor checkout-index, which applies eol and filter attributes."""
+    os.makedirs(dest)
+    ls = git(repo, "ls-tree", "-r", "-z", "--full-tree", sha + "^{tree}", binary=True)
+    entries = []
+    for rec in ls.stdout.split(b"\0"):
+        if not rec:
+            continue
+        meta, _, path = rec.partition(b"\t")
+        mode, kind, obj = meta.decode().split()
+        rel = path.decode("utf-8", errors="surrogateescape")
+        parts = rel.split("/")
+        if rel.startswith("/") or any(p in ("", ".", "..", ".git") for p in parts):
+            raise GateError("the tree holds an unsafe path %r" % rel)
+        entries.append((mode, kind, obj, rel))
+    blobs = [e for e in entries if e[1] == "blob"]
+    cat = subprocess.run(["git", "-C", repo, "cat-file", "--batch"],
+                         input="".join(e[2] + "\n" for e in blobs).encode(),
+                         capture_output=True, check=False)
+    if cat.returncode != 0:
+        raise GateError("git cat-file: %s" % cat.stderr.decode(errors="replace").strip())
+    data, pos = cat.stdout, 0
+    for mode, kind, obj, rel in entries:
+        target = os.path.join(dest, rel)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if kind == "commit":  # a submodule: an empty directory, as git archive leaves it
+            os.makedirs(target, exist_ok=True)
+            continue
+        if kind != "blob":
+            raise GateError("unexpected tree entry %s %s" % (kind, rel))
+        nl = data.index(b"\n", pos)
+        head = data[pos:nl].split()
+        if len(head) != 3 or head[0].decode() != obj or head[1] != b"blob":
+            raise GateError("git cat-file: unexpected %r for %s" % (data[pos:nl], rel))
+        size = int(head[2])
+        body = data[nl + 1:nl + 1 + size]
+        pos = nl + 1 + size + 1
+        if mode == "120000":
+            os.symlink(body, target)
+            continue
+        with open(target, "wb") as fh:
+            fh.write(body)
+        os.chmod(target, 0o755 if mode == "100755" else 0o644)
+    if os.path.exists(os.path.join(dest, ".git")):
+        raise GateError("the export holds a .git")
+    return dest
+
+
+def apply_exclusions(src, exclude_tests):
+    """Delete the listed test files from the export. Returns problems."""
+    problems = []
+    for entry in exclude_tests:
+        path = os.path.join(src, entry["path"])
+        if not os.path.isfile(path):
+            problems.append("exclude_tests: %s is not a file in the pushed tree" % entry["path"])
+            continue
+        os.remove(path)
+        say("excluded from this local run: %s (%s)" % (entry["path"], entry["why"]))
+    return problems
+
+
+def run_host_gates(repo, sha, base, commands, workdir):
+    """host_gates in a detached worktree of SHA, with history. Returns problems."""
+    if not commands:
+        return []
+    wt = os.path.join(workdir, "host-wt")
+    git(repo, "worktree", "add", "--quiet", "--detach", wt, sha)
+    problems = []
+    try:
+        env = dict(os.environ)
+        env.update({"FLEET_GATE_SHA": sha, "FLEET_GATE_BASE": base or ""})
+        for cmd in commands:
+            say("host gate: %s" % cmd)
+            code = subprocess.run(["sh", "-c", cmd], cwd=wt, env=env, stdin=subprocess.DEVNULL, check=False).returncode
+            if code != 0:
+                problems.append("host gate failed (exit %d): %s" % (code, cmd))
+    finally:
+        git(repo, "worktree", "remove", "--force", wt, check=False)
+    return problems
+
+
+# --- verdict ---------------------------------------------------------------------------
+
+
+def parse_skips(text):
+    """[(reason, count)] from testthat's 'Skipped tests' section."""
+    lines = text.splitlines()
+    start = None
+    for i, l in enumerate(lines):
+        if re.match(r"^\W*Skipped tests \(\d+\)", l):
+            start = i + 1
+    if start is None:
+        return []
+    items = []
+    for l in lines[start:]:
+        if re.match(r"^\W*(Failed tests|Warnings|Failed|\[ FAIL)", l) or re.match(r"^══", l):
+            break
+        m = re.match(r"^[•*] (.*)$", l)
+        if m:
+            items.append(m.group(1))
+        elif items and l.startswith("  ") and l.strip():
+            items[-1] += " " + l.strip()
+    out = []
+    for it in items:
+        m = re.match(r"^(.*) \((\d+)\): .*$", it) or re.match(r"^(.*) \((\d+)\)$", it)
+        if m:
+            out.append((m.group(1).strip(), int(m.group(2))))
+            continue
+        m = re.match(r"^(.*?) \(['\w.-]+\.[Rr]:\d+(?::\d+)?'?\)$", it) or re.match(r"^(.*?): '?[\w.-]+\.[Rr]:\d+", it)
+        out.append(((m.group(1) if m else it).strip(), 1))
+    return out
+
+
+def verify_legs(status, config):
+    """Each `locale_legs` entry ran its own check (as t2-locale does), and the
+    locale assertions ran against it. Without `locale_legs`, the assertions
+    need t2-locale's default leg, C. Returns problems."""
+    problems = []
+    legs = status.get("legs") or {}
+    want = config.get("locale_legs") or (["C"] if config.get("locale_assertions") else [])
+    for leg in want:
+        rec = legs.get(leg)
+        if not isinstance(rec, dict):
+            problems.append("locale leg %s did not run" % leg)
+            continue
+        if rec.get("error"):
+            problems.append("locale leg %s: R CMD check: %s" % (leg, rec["error"].strip().splitlines()[0]))
+            continue
+        if not rec.get("complete"):
+            problems.append("locale leg %s: 00check.log has no Status line" % leg)
+        if rec.get("exit") != 0:
+            problems.append("locale leg %s: R CMD check exited with status %s" % (leg, rec.get("exit")))
+        if rec.get("errors") or rec.get("warnings"):
+            problems.append("locale leg %s: %s ERROR(s), %s WARNING(s)" % (leg, rec.get("errors"), rec.get("warnings")))
+        if config.get("locale_assertions") and rec.get("assertions") != len(config["locale_assertions"]):
+            problems.append("locale leg %s: %s of %d locale assertions ran"
+                            % (leg, rec.get("assertions"), len(config["locale_assertions"])))
+    return problems
+
+
+def verify_check(out, config):
+    """Problems with the container's full-tier result in OUT."""
+    problems = []
+    try:
+        with open(os.path.join(out, "status.json"), encoding="utf-8") as fh:
+            status = json.load(fh)
+    except (OSError, ValueError):
+        return ["no status.json: the container step did not finish"]
+    for g in status.get("gates") or []:
+        if g.get("exit") != 0:
+            problems.append("%s gate failed (exit %s): %s" % (g.get("kind"), g.get("exit"), g.get("cmd")))
+    if status.get("step") != "full":
+        return problems
+    problems += verify_legs(status, config)
+    check = status.get("check") or {}
+    if check.get("error"):
+        problems.append("R CMD check: %s" % check["error"].strip().splitlines()[0])
+    rchecks = sorted(
+        os.path.join(out, "check", d)
+        for d in (os.listdir(os.path.join(out, "check")) if os.path.isdir(os.path.join(out, "check")) else [])
+        if d.endswith(".Rcheck")
+    )
+    if len(rchecks) != 1:
+        problems.append("R CMD check did not run: no single .Rcheck directory")
+        return problems
+    rcheck = rchecks[0]
+    log = os.path.join(rcheck, "00check.log")
+    text = open(log, encoding="utf-8", errors="replace").read() if os.path.isfile(log) else ""
+    if not re.search(r"^Status:", text, re.M):
+        problems.append("R CMD check did not complete: 00check.log has no Status line")
+    if "error" not in check and check.get("exit") != 0:
+        problems.append("R CMD check exited with status %s" % check.get("exit"))
+    if "error" not in check and (check.get("errors") or check.get("warnings")):
+        problems.append("R CMD check: %s ERROR(s), %s WARNING(s)" % (check.get("errors"), check.get("warnings")))
+    tests = os.path.join(rcheck, "tests")
+    rout = None
+    for name in ("testthat.Rout", "testthat.Rout.fail"):
+        if os.path.isfile(os.path.join(tests, name)):
+            rout = os.path.join(tests, name)
+            break
+    if rout is None:
+        problems.append("no tests/testthat.Rout in %s: the test run cannot be read" % os.path.basename(rcheck))
+        return problems
+    rtext = open(rout, encoding="utf-8", errors="replace").read()
+    sums = SUMMARY_RE.findall(rtext)
+    if not sums:
+        problems.append("%s has no [ FAIL n | WARN n | SKIP n | PASS n ] line" % os.path.basename(rout))
+        return problems
+    nfail, _nwarn, nskip, npass = (int(x) for x in sums[-1])
+    say("tests: FAIL %d | SKIP %d | PASS %d" % (nfail, nskip, npass))
+    if nfail:
+        problems.append("%d test(s) failed" % nfail)
+    if nskip:
+        allowed = {a["reason"] for a in config["allowed_skips"]}
+        skips = parse_skips(rtext)
+        if sum(n for _, n in skips) != nskip:
+            problems.append("SKIP %d, but the Skipped tests section reads %d" % (nskip, sum(n for _, n in skips)))
+        for reason, n in skips:
+            if reason in allowed:
+                say("allowed skip (%d): %s" % (n, reason))
+            else:
+                problems.append("unexpected skip (%d): %s; allow it in .fleet-ci.yml allowed_skips with a why, or fix the test" % (n, reason))
+    return problems
+
+
+# --- the pass stamp ---------------------------------------------------------------------
+
+
+def stamp_name(tree, tier, image_id, lock_hash):
+    key = "\n".join(["fleet-gate %s" % GATE_VERSION, tree, tier, classify.CLASSIFIER_VERSION, image_id, lock_hash])
+    return "%s.%s.%s" % (tree, tier, hashlib.sha256(key.encode()).hexdigest()[:24]), key
+
+
+def stamp_dir(repo):
+    common = git(repo, "rev-parse", "--git-common-dir")
+    if not os.path.isabs(common):
+        common = os.path.join(repo, common)
+    return os.path.join(common, "verify-pass")
+
+
+def write_stamp(repo, name, key):
+    d = stamp_dir(repo)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+        fh.write(key + "\n")
+
+
+def has_stamp(repo, name):
+    return os.path.isfile(os.path.join(stamp_dir(repo), name))
+
+
+# --- one run -------------------------------------------------------------------------------
+
+
+def clear_out(out, keep=("config.json", "pkg.lock")):
+    """Empty OUT but for KEEP, so a step never reads an earlier step's
+    status.json or check directory."""
+    for name in os.listdir(out):
+        if name in keep:
+            continue
+        path = os.path.join(out, name)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
+
+
+def docker_step(image, src, out, step, volume, readonly_src=False):
+    clear_out(out)
+    user = host_user()
+    if not user.startswith("0:"):
+        own = own_cache_cmd(image, volume, user)
+        if subprocess.run(own, stdin=subprocess.DEVNULL, capture_output=True, check=False).returncode != 0:
+            raise GateError("could not hand the pak cache volume %s to %s" % (volume, user))
+    cmd = docker_run_cmd(image, src, out, step, volume, readonly_src, user)
+    say("$ " + " ".join(shlex.quote(c) for c in cmd))
+    return subprocess.run(cmd, stdin=subprocess.DEVNULL, check=False).returncode
+
+
+def run_gate(repo, sha, base, tier, dev, override):
+    t_start = time.time()
+    timings = []
+
+    def lap(label, t0):
+        timings.append("%s %.1fs" % (label, time.time() - t0))
+
+    tree = git(repo, "rev-parse", sha + "^{tree}")
+    text = show(repo, sha, ".fleet-ci.yml")
+    if text is None:
+        raise GateError("%s has no .fleet-ci.yml (README.md, 'The .fleet-ci.yml file')" % sha[:12])
+    try:
+        config = classify.load_config_text(text)
+    except classify.ConfigError as err:
+        raise GateError(str(err))
+    if tier == "auto":
+        try:
+            tier, reasons = classify.classify_range(repo, base or "", sha)
+        except classify.ConfigError as err:
+            raise GateError(str(err))
+        for r in reasons:
+            say("classify: %s" % r)
+    say("%s: tier %s (classifier %s), tree %s" % (sha[:12], tier, classify.CLASSIFIER_VERSION, tree[:12]))
+    check_pin(repo, sha, dev, config["variant"])
+    images = parse_images(show(repo, sha, ".fleet-ci/images"))
+    image, identity, is_override = choose_image(images, config["variant"], override, dev)
+    if is_override:
+        loud([
+            "FLEET_CI_IMAGE_OVERRIDE=%s" % override,
+            "This gate runs on a local image, not the digest the pinned fleet-ci names.",
+            "A pass here is a development result only.",
+        ])
+    image_id, rver, arch = image_facts(image, pull=not is_override)
+    if is_override:
+        identity = "%s@%s" % (identity, image_id)
+    volume = cache_volume(rver, arch, config["variant"])
+    problems = []
+    with tempfile.TemporaryDirectory(prefix="fleet-gate-") as work:
+        t0 = time.time()
+        src = export_tree(repo, sha, os.path.join(work, "src"))
+        out = os.path.join(work, "out")
+        os.makedirs(out)
+        with open(os.path.join(out, "config.json"), "w", encoding="utf-8") as fh:
+            json.dump(config, fh)
+        lap("export", t0)
+        lock_hash = "-"
+        if tier == "full":
+            problems += apply_exclusions(src, config["exclude_tests"])
+            t0 = time.time()
+            problems += run_host_gates(repo, sha, base, config["host_gates"], work)
+            lap("host gates", t0)
+            t0 = time.time()
+            with CacheLock(volume):
+                if docker_step(image, src, out, "resolve", volume, readonly_src=True) != 0:
+                    raise GateError("the dependency resolution failed")
+            with open(os.path.join(out, "pkg.lock"), "rb") as fh:
+                lock_hash = hashlib.sha256(fh.read()).hexdigest()
+            lap("resolve", t0)
+        name, key = stamp_name(tree, tier, identity, lock_hash)
+        if not problems and has_stamp(repo, name):
+            say("pass stamp %s: tree %s already passed the %s tier on this image and lock; skipped"
+                % (name, tree[:12], tier))
+            return 0
+        t0 = time.time()
+        with CacheLock(volume):
+            code = docker_step(image, src, out, tier, volume)
+        lap("container %s" % tier, t0)
+        if code != 0:
+            problems.append("the container step exited %d" % code)
+        problems += verify_check(out, config)
+        keep = os.environ.get("FLEET_GATE_KEEP")
+        if keep:
+            dest = os.path.join(keep, "%s-%s" % (sha[:12], tier))
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.copytree(out, dest, symlinks=True)
+            say("kept the container's output in %s" % dest)
+    say("timings: %s; total %.1fs" % (", ".join(timings), time.time() - t_start))
+    if problems:
+        for p in problems:
+            say("FAIL: %s" % p)
+        say("%s tier FAILED for %s" % (tier, sha[:12]))
+        return 1
+    write_stamp(repo, name, key)
+    say("%s tier passed for %s; stamp %s written" % (tier, sha[:12], name))
+    return 0
+
+
+def main(argv):
+    if argv[:1] == ["--version"]:
+        print("gate %s, classifier %s" % (GATE_VERSION, classify.CLASSIFIER_VERSION))
+        return 0
+    repo = None
+    dev = False
+    while argv and argv[0] in ("--repo", "--dev"):
+        if argv[0] == "--dev":
+            dev = True
+            argv = argv[1:]
+        elif len(argv) >= 2:
+            repo, argv = argv[1], argv[2:]
+        else:
+            break
+    if not argv or argv[0] not in ("docs", "full", "auto", "pre-push"):
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    override = os.environ.get("FLEET_CI_IMAGE_OVERRIDE", "")
+    pc_to = os.environ.get("PRE_COMMIT_TO_REF", "")
+    pc_remote = os.environ.get("PRE_COMMIT_REMOTE_NAME", "") or "origin"
+    # Scrubbed before the repository is resolved: an inherited GIT_DIR or
+    # GIT_WORK_TREE would otherwise pick it.
+    dropped = scrub_env(os.environ)
+    if dropped:
+        say("dropped inherited %s" % " ".join(dropped))
+    if repo is None:
+        res = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False)
+        repo = res.stdout.strip() if res.returncode == 0 else os.getcwd()
+    try:
+        if argv[0] == "pre-push":
+            if len(argv) not in (2, 3):
+                raise GateError("usage: gate pre-push REMOTE [URL]")
+            remote = argv[1]
+            refs = [r for r in parse_push_lines(sys.stdin.read()) if not is_zero(r["local_sha"])]
+            problems = check_push_shape(repo, remote, refs, default_branch(repo, remote))
+            if problems:
+                for p in problems:
+                    say("REFUSED: %s" % p)
+                return 1
+            status = 0
+            for r in refs:
+                # Against the target, never the branch's previous remote tip.
+                base = target_base(repo, r["local_sha"], remote)
+                say("%s -> %s (base %s)" % (r["local_ref"], r["remote_ref"], base[:12] or "unknown"))
+                status |= run_gate(repo, r["local_sha"], base, "auto", dev, override)
+            return status
+        tier = argv[0]
+        rest = argv[1:]
+        sha, base = None, None
+        while rest:
+            if rest[0] in ("--sha", "--base") and len(rest) >= 2:
+                if rest[0] == "--sha":
+                    sha = rest[1]
+                else:
+                    base = rest[1]
+                rest = rest[2:]
+            else:
+                raise GateError("unknown argument %r" % rest[0])
+        if sha is None:
+            sha = pc_to or "HEAD"
+        sha = git(repo, "rev-parse", "--verify", sha + "^{commit}")
+        if base is None and tier == "auto":
+            base = target_base(repo, sha, pc_remote)
+        return run_gate(repo, sha, base, tier, dev, override)
+    except GateError as err:
+        say("ERROR: %s" % err)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

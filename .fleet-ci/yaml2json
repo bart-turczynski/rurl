@@ -1,0 +1,67 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# bin/yaml2json FILE|-: print FILE's YAML as JSON on stdout.
+#
+# Python's standard library has no YAML parser, and bin/rules-sim,
+# bin/classify and bin/gate need one. This bridge uses Ruby's Psych, the
+# library GitLab itself parses .gitlab-ci.yml with, so anchors, merge keys
+# (`<<`) and YAML 1.1 scalars read the same here as on GitLab. A
+# `!reference [a, b]` tag becomes {"!reference": ["a", "b"]}; any other
+# local tag is an error, so nothing GitLab would treat specially passes
+# unseen. Exit 0 on success, 1 on a parse error, 2 on a usage error.
+
+require 'yaml'
+require 'json'
+
+# A !reference sequence, kept apart from plain arrays.
+class FleetReference < Array
+  def init_with(coder)
+    replace(coder.seq)
+  end
+end
+YAML.add_tag('!reference', FleetReference)
+
+def convert(value)
+  case value
+  when FleetReference then { '!reference' => value.map { |e| convert(e) } }
+  when Array then value.map { |e| convert(e) }
+  when Hash
+    value.each_with_object({}) do |(k, v), h|
+      raise "mapping key #{k.inspect} is not a string" if k.is_a?(Hash) || k.is_a?(Array)
+
+      h[k.to_s] = convert(v)
+    end
+  when String, Integer, Float, TrueClass, FalseClass, NilClass then value
+  else raise "unsupported YAML value of class #{value.class}"
+  end
+end
+
+# Psych drops an unknown local tag silently; refuse it instead.
+def check_tags(node, path)
+  tag = node.respond_to?(:tag) ? node.tag : nil
+  if tag && tag != '!reference' && !tag.start_with?('tag:yaml.org,2002:')
+    raise "#{path}: unsupported tag #{tag}"
+  end
+  return unless node.respond_to?(:children) && node.children
+
+  node.children.each { |c| check_tags(c, path) }
+end
+
+if ARGV.length != 1
+  warn 'usage: yaml2json FILE|-'
+  exit 2
+end
+path = ARGV[0]
+begin
+  text = path == '-' ? $stdin.read : File.read(path)
+  check_tags(YAML.parse_stream(text), path)
+  data = YAML.safe_load(text, permitted_classes: [FleetReference], aliases: true)
+  puts JSON.generate(convert(data))
+rescue Errno::ENOENT
+  warn "yaml2json: #{path}: no such file"
+  exit 1
+rescue StandardError, Psych::Exception => e
+  warn "yaml2json: #{path}: #{e.message}"
+  exit 1
+end

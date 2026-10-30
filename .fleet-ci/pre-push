@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""bin/pre-push: a fleet package's git pre-push hook, vendored as .fleet-ci/pre-push.
+
+    .fleet-ci/pre-push REMOTE [URL]    as git's pre-push hook (refs on stdin)
+    .fleet-ci/pre-push --install       install this as the repository's hook
+
+git hands a pre-push hook every pushed ref on stdin. pre-commit's own hook
+runs each pre-push hook once per ref with PRE_COMMIT_TO_REF set, and none of
+them sees the whole push, so `.fleet-ci/gate auto` inside pre-commit gates
+only that one ref and cannot refuse a push of several refs to main or of
+more than one merge. This hook reads stdin once and:
+
+  1. runs `.fleet-ci/gate pre-push REMOTE URL` with it: every pushed sha is
+     gated, and the push-shape refusals run;
+  2. when the gate passes and the repository has a .pre-commit-config.yaml,
+     runs pre-commit's pre-push stage with the same arguments and stdin, as
+     pre-commit's own hook would (`pre-commit hook-impl --hook-type=pre-push`),
+     so the package's other pre-push hooks still run. That configuration
+     must not run the gate itself.
+
+Under pre-commit's migration mode (`pre-commit install -t pre-push` run over
+this hook moves it to pre-push.legacy, and pre-commit's hook runs it with
+PRE_COMMIT_RUNNING_LEGACY=1 before its own hooks), step 2 is pre-commit's:
+this hook gates the push and exits with the gate's status, without invoking
+pre-commit. `pre-commit install -f` deletes pre-push.legacy, and the gate
+with it.
+
+`--install` writes a two-line hook into the repository's hooks directory
+that runs the checkout's own .fleet-ci/pre-push. It replaces pre-commit's
+pre-push hook (this one runs that stage), removes a pre-push.legacy that is
+this hook, and refuses any other existing hook or pre-push.legacy. Exit 0
+when the push may go on, non-zero otherwise.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+MARK = "# fleet-ci pre-push hook (.fleet-ci/pre-push --install)"
+HOOK = "#!/bin/sh\n%s\nexec .fleet-ci/pre-push \"$@\"\n" % MARK
+
+
+def say(msg):
+    print("fleet-ci pre-push: %s" % msg, file=sys.stderr, flush=True)
+
+
+def git_out(*args):
+    res = subprocess.run(["git"] + list(args), capture_output=True, text=True, check=False)
+    return res.stdout.strip() if res.returncode == 0 else None
+
+
+def install():
+    hooks = git_out("rev-parse", "--git-path", "hooks")
+    if hooks is None:
+        say("not in a git repository")
+        return 2
+    os.makedirs(hooks, exist_ok=True)
+    path = os.path.join(hooks, "pre-push")
+    if os.path.lexists(path):
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            have = fh.read()
+        if MARK not in have and "pre-commit" not in have:
+            say("%s exists and is neither pre-commit's nor this one; move it away first" % path)
+            return 1
+    # pre-commit's migration mode keeps the hook it replaced here, and its
+    # hook-impl (which this hook runs) would run it.
+    legacy = path + ".legacy"
+    if os.path.lexists(legacy):
+        with open(legacy, encoding="utf-8", errors="replace") as fh:
+            if MARK not in fh.read():
+                say("%s exists and is not this hook; pre-commit's hook would run it too, "
+                    "so move it away first" % legacy)
+                return 1
+        os.remove(legacy)
+        say("removed %s (this hook, under pre-commit's migration mode)" % legacy)
+    tmp = path + ".fleet-ci.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(HOOK)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, path)
+    say("installed %s" % path)
+    return 0
+
+
+def main(argv):
+    if argv == ["--install"]:
+        return install()
+    if len(argv) not in (1, 2) or argv[0].startswith("-"):
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    lines = sys.stdin.buffer.read()
+    gate = os.path.join(HERE, "gate")
+    code = subprocess.run([gate, "pre-push"] + argv, input=lines, check=False).returncode
+    if code != 0:
+        say("the gate refused the push (exit %d)" % code)
+        return code
+    if os.environ.get("PRE_COMMIT_RUNNING_LEGACY"):
+        # pre-commit's hook ran this one as pre-push.legacy and runs its own
+        # hooks next; calling hook-impl from here would abort ("installed in
+        # migration mode").
+        return code
+    top =git_out("rev-parse", "--show-toplevel") or os.getcwd()
+    config = os.path.join(top, ".pre-commit-config.yaml")
+    if not os.path.isfile(config):
+        return 0
+    if shutil.which("pre-commit") is None:
+        say("%s exists but pre-commit is not on PATH, so its pre-push hooks cannot run" % config)
+        return 1
+    hooks = git_out("rev-parse", "--git-path", "hooks") or os.path.join(top, ".git", "hooks")
+    cmd = ["pre-commit", "hook-impl", "--config=%s" % config, "--hook-type=pre-push",
+           "--hook-dir", os.path.abspath(hooks), "--"] + argv
+    code = subprocess.run(cmd, input=lines, cwd=top, check=False).returncode
+    if code != 0:
+        say("pre-commit's pre-push stage failed (exit %d)" % code)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,80 @@
+# The fleet-ci local gate's settings: T0 (docs) and T1 (full) before every
+# push, run by .fleet-ci/gate in the fleet image (fleet-ci README, "The
+# .fleet-ci.yml file"; seor ADR 0012). Read from the pushed commit.
+version: 1
+
+# The image the gate runs in. fleet-r-idn2 carries libidn2, so punycoder can
+# build its libidn2 backend, as on CRAN's Debian flavors, where rurl 3.1.0's
+# first upload failed (RURL-woljcpfu). It must be .gitlab-ci.yml's
+# FLEET_RELEASE_VARIANT. The build without libidn2 is T2's (x-check-no-idn2).
+variant: fleet-r-idn2
+
+# Allowlisted paths that a gate here reads, so a change to them is never
+# docs-only. tools/verify.R runs the manifest gates, and they validate the
+# records under design/work/url-v3/ (validate-records, traceability,
+# citation, deferral, release-rule, oracle-label, oracle-provenance) and
+# resolve ADR numbers against design/adr/. tools/pkgdown-reference-gate.R and
+# scripts/check-bugreports.py read _pkgdown.yml.
+docs_exclude:
+  - design/work/url-v3/**
+  - design/adr/**
+  - _pkgdown.yml
+
+# T0, and the start of T1. Genuine terms go in inst/WORDLIST (SEOR-mtbzfroz).
+docs_gates:
+  - Rscript -e 'bad <- spelling::spell_check_package(); if (nrow(bad)) { print(bad); quit(status = 1) }'
+
+# T1, in the container after the dependency install, each run whatever the
+# others report:
+# - the manifest gates and their self-tests (tools/verify.R reads the list
+#   from tools/verify-manifest.yml; the export has no git history, so it runs
+#   every self-test);
+# - man/, NAMESPACE and DESCRIPTION against a fresh roxygen2 run
+#   (SEOR-nwfmerhu); lintr; the NEWS heading against the version;
+# - every declared URL (the gate's R CMD check runs with remote incoming, and
+#   so its URL check, off);
+# - punycoder built with libidn2: the assertion fails when the run library's
+#   punycoder lacks it, so the gate is never silently the cell without it
+#   (SEOR-hxxxkmws);
+# - the locale-relevant tests under LC_ALL=C, asserted to have run
+#   (RURL-izzuenjx). The whole suite under C is t2-locale's.
+cheap_gates:
+  - Rscript tools/verify.R --gates
+  - Rscript scripts/check-docs-drift.R .
+  - Rscript -e 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }'
+  - sh scripts/check-news-version.sh
+  - Rscript scripts/check-urls.R
+  - Rscript -e 'b <- punycoder:::.backend_info(); print(b); if (!isTRUE(b$has_libidn2)) stop("punycoder was built without libidn2, so this gate is not the libidn2 cell (SEOR-hxxxkmws)", call. = FALSE)'
+  - LC_ALL=C LANG=C Rscript tools/check-locale-tests.R
+
+# test-strings-base.R and test-invalid-utf8-batch.R switch LC_CTYPE to
+# en_US.UTF-8 and skip when it is missing, and tests/testthat.R selects it.
+# The gate runs as the invoking user and reads compiled locales from its own
+# LOCPATH only (fleet-ci README, "A known local/CI difference: locales").
+locales:
+  - en_US.UTF-8
+
+# The gate runs R CMD check with NOT_CRAN=true, so skip_on_cran() no longer
+# keeps these out of it. T2 runs both, as osv-audit and security-audit.
+exclude_tests:
+  - path: tests/testthat/test-osv.R
+    why: queries osv.dev over the network; the osv-audit job runs it in T2
+  - path: tests/testthat/test-security.R
+    why: queries Sonatype OSS Index with credentials the gate does not have; the security-audit job runs it in T2
+
+# The top-level .md files the pkgdown site publishes; every other one (the
+# agent files among them) is moved out before build_site() (SEOR-wqxhftpv).
+# ARCHITECTURE.md and RELEASE_NOTES_v1.md were already live when the
+# keep-list landed and stay published. cran-comments.md is on pkgdown's own
+# skip list.
+pages_keep:
+  - README.md
+  - NEWS.md
+  - LICENSE.md
+  - CONTRIBUTING.md
+  - SECURITY.md
+  - CODE_OF_CONDUCT.md
+  - ACKNOWLEDGMENTS.md
+  - cran-comments.md
+  - ARCHITECTURE.md
+  - RELEASE_NOTES_v1.md

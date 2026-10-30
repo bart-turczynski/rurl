@@ -1,0 +1,7 @@
+# The fleet-ci image variables, from templates/r-package.yml at 78cc09b730db1853f7501d2a3e8bb82475723a68.
+# Written by fleet-ci's bin/vendor; never edit by hand.
+FLEET_IMAGE_R_RELEASE=registry.gitlab.com/bart-turczynski/fleet-ci/fleet-r:4.6.1-20261029@sha256:d3b98ec0b17fdf93f5aa7c2113c5e4cab85ceb1c77b2c5a0f02eba8a95dbb310
+FLEET_IMAGE_R_OLDREL=registry.gitlab.com/bart-turczynski/fleet-ci/fleet-r:4.5.2-20261029@sha256:dd53905381baa8bfac22701a8e333199220a8ae633d8ed9d843c6991877afbd3
+FLEET_IMAGE_R_DEVEL=registry.gitlab.com/bart-turczynski/fleet-ci/fleet-r:devel-20261029@sha256:b16694176a5b4fb1aa6a804b59822d3bceafdb31fbc6ba965193ce28d32ab634
+FLEET_IMAGE_TEX_RELEASE=registry.gitlab.com/bart-turczynski/fleet-ci/fleet-r-tex:4.6.1-20261029@sha256:bdcca06791d1ca38ba400f8eeeda81c73253a5f4b05996ef8175dad76f3ca6ea
+FLEET_IMAGE_IDN2_RELEASE=registry.gitlab.com/bart-turczynski/fleet-ci/fleet-r-idn2:4.6.1-20261029@sha256:eeabdc8274d5417d152d3fcf2ba06974aa6e6b82c38f1b1672855345dfab9212
