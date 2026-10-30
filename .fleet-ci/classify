@@ -64,10 +64,26 @@ CONFIG_SCHEMA = {
     "pages_keep": "strings",
 }
 VARIANTS = ("fleet-r", "fleet-r-idn2")
+# An agent instruction file, which pages_keep should never name: the whole
+# stem, any case, or FP_ and anything. The pages job in templates/r-package.yml
+# refuses the same names with the same pattern (its agent_re; bin/selftest
+# checks the two strings are equal); here such an entry is only a warning,
+# so a v1 package's gate keeps passing.
+AGENT_MD = re.compile(r"^(agents?|claude|gemini|codex|warp|crush|copilot-instructions|fp_.*)\.md$", re.IGNORECASE)
+
+# The warnings check_config gave, each printed to stderr once as it is
+# recorded; they never change the exit status.
+CONFIG_WARNINGS = []
 
 
 class ConfigError(Exception):
     pass
+
+
+def config_warning(msg):
+    if msg not in CONFIG_WARNINGS:
+        CONFIG_WARNINGS.append(msg)
+        print("classify: WARNING: %s" % msg, file=sys.stderr)
 
 
 def glob_to_regex(pattern):
@@ -175,6 +191,18 @@ def check_config(data):
                 check_regex(key, v)
             if key == "locales":
                 check_locales(value)
+            if key == "pages_keep":
+                for v in value:
+                    if "/" in v:
+                        config_warning(
+                            ".fleet-ci.yml: pages_keep entry '%s' is not a bare top-level file name; "
+                            "the pages job will refuse it" % v
+                        )
+                    elif AGENT_MD.match(v):
+                        config_warning(
+                            ".fleet-ci.yml: pages_keep entry '%s' is an agent file, which the site never "
+                            "publishes; the pages job will refuse it" % v
+                        )
         else:
             first = "path" if kind == "path_why" else "reason"
             if not isinstance(value, list):

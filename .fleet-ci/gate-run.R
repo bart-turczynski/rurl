@@ -7,9 +7,10 @@
 # untracked file or the maintainer's R library. Steps:
 #
 #   resolve  resolve the package's dependencies into /out/pkg.lock
-#   docs     the docs tier: .fleet-ci.yml's docs_gates, then check_pkgdown()
+#   docs     the docs tier: .fleet-ci.yml's docs_gates, then the pages job's
+#            destination rule and check_pkgdown()
 #   full     the full tier: locales, the dependency install from
-#            /out/pkg.lock into a private run library, the docs gates, the
+#            /out/pkg.lock into a private run library, the docs tier, the
 #            cheap gates, one R CMD check through fleet_check(), and, as
 #            t2-locale: one more check per `locale_legs` entry (default C
 #            when there are locale assertions) under LC_ALL=<leg>, the
@@ -80,9 +81,163 @@ if (step == "resolve") {
   quit(status = 0L)
 }
 
+# The directory pkgdown builds the site into, relative to the package root:
+# the top-level `destination` of the first pkgdown config file pkgdown 2.x
+# reads (_pkgdown.yml, _pkgdown.yaml, then each under pkgdown/ and inst/),
+# default docs. It stops on an absolute destination, one outside the package
+# (by .. or a symbolic link, a dangling one included), the package root
+# itself, or public or .fleet-agent-md or inside either (lexically or
+# through a link). templates/
+# r-package.yml's pages job has the same functions (fleet_pkgdown_config(),
+# fleet_pages_dst(), fleet_pages_devdst()) and publishes that directory;
+# bin/selftest checks each pair is one function and runs them.
+#
+# The first pkgdown config file pkgdown 2.x reads, as list(yml, cfg): its
+# name (default _pkgdown.yml) and its parsed contents (list() without one).
+fleet_pkgdown_config <- function() {
+  cfgs <- c("_pkgdown.yml", "_pkgdown.yaml", "pkgdown/_pkgdown.yml", "pkgdown/_pkgdown.yaml",
+            "inst/_pkgdown.yml", "inst/_pkgdown.yaml")
+  cfgs <- cfgs[file.exists(cfgs)]
+  yml <- if (length(cfgs)) cfgs[[1L]] else "_pkgdown.yml"
+  list(yml = yml, cfg = if (length(cfgs)) yaml::read_yaml(yml) else list())
+}
+
+fleet_pages_dst <- function() {
+  pc <- fleet_pkgdown_config()
+  yml <- pc$yml
+  cfg <- pc$cfg
+  dst <- if (is.null(cfg$destination)) "docs" else cfg$destination
+  if (!is.character(dst) || length(dst) != 1L || is.na(dst) || !nzchar(dst)) {
+    stop("fleet-ci: ", yml, " destination must be one non-empty path", call. = FALSE)
+  }
+  if (startsWith(path.expand(dst), "/")) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " is an absolute path; give it relative to the package root", call. = FALSE)
+  }
+  root <- normalizePath(".", mustWork = TRUE)
+  parts <- character()
+  for (p in strsplit(file.path(root, dst), "/", fixed = TRUE)[[1L]]) {
+    if (p == "..") parts <- head(parts, -1L) else if (nzchar(p) && p != ".") parts <- c(parts, p)
+  }
+  root_parts <- Filter(nzchar, strsplit(root, "/", fixed = TRUE)[[1L]])
+  n <- length(root_parts)
+  if (length(parts) <= n || !identical(parts[seq_len(n)], root_parts)) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " is not a directory inside the package", call. = FALSE)
+  }
+  public <- file.path(root, "public")
+  in_public <- function(p) p == public || startsWith(p, paste0(public, "/"))
+  rel <- paste(parts[-seq_len(n)], collapse = "/")
+  if (in_public(file.path(root, rel))) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " is public or inside it, the directory the pages job publishes", call. = FALSE)
+  }
+  moved <- file.path(root, ".fleet-agent-md")
+  in_moved <- function(p) p == moved || startsWith(p, paste0(moved, "/"))
+  if (in_moved(file.path(root, rel))) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " is .fleet-agent-md or inside it, where the pages job moves unpublished .md files", call. = FALSE)
+  }
+  # The deepest component that exists, a dangling symbolic link included,
+  # resolved; the components below it do not exist yet, so they cannot be links.
+  # Sys.readlink gives "" for a path that is not a link, NA for a missing one.
+  seen <- rel
+  while (seen != "." && !file.exists(seen) && Sys.readlink(seen) %in% c("", NA)) seen <- dirname(seen)
+  if (seen != "." && !file.exists(seen)) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " goes through a symbolic link that does not resolve", call. = FALSE)
+  }
+  rest <- if (seen == ".") rel else substring(rel, nchar(seen) + 2L)
+  real <- if (seen == ".") root else normalizePath(seen, mustWork = TRUE)
+  if (nzchar(rest)) real <- file.path(real, rest)
+  if (!startsWith(real, paste0(root, "/"))) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " resolves through a symbolic link outside the package or to its root", call. = FALSE)
+  }
+  if (in_public(real)) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " resolves through a symbolic link to public or inside it", call. = FALSE)
+  }
+  if (in_moved(real)) {
+    stop("fleet-ci: ", yml, " destination ", dQuote(dst, FALSE),
+         " resolves through a symbolic link to .fleet-agent-md or inside it", call. = FALSE)
+  }
+  rel
+}
+
+# The development.destination of the same config file, where pkgdown puts
+# the site in its devel and unreleased modes, relative to the destination,
+# default dev; it must stay inside the destination. The mode is
+# PKGDOWN_DEV_MODE when set, as pkgdown reads it, else development.mode. In
+# any other mode (release, or none given) pkgdown never uses the value, so
+# it is not checked and dev is returned.
+fleet_pages_devdst <- function() {
+  pc <- fleet_pkgdown_config()
+  yml <- pc$yml
+  devcfg <- if (is.list(pc$cfg$development)) pc$cfg$development else list()
+  mode <- Sys.getenv("PKGDOWN_DEV_MODE")
+  if (!nzchar(mode) && is.character(devcfg$mode) && length(devcfg$mode) == 1L) mode <- devcfg$mode
+  if (!mode %in% c("devel", "unreleased")) return("dev")
+  dev <- devcfg$destination
+  if (is.null(dev)) dev <- "dev"
+  if (!is.character(dev) || length(dev) != 1L || is.na(dev) || !nzchar(dev)) {
+    stop("fleet-ci: ", yml, " development destination must be one non-empty path", call. = FALSE)
+  }
+  if (startsWith(path.expand(dev), "/")) {
+    stop("fleet-ci: ", yml, " development destination ", dQuote(dev, FALSE),
+         " is an absolute path; give it relative to the destination", call. = FALSE)
+  }
+  parts <- character()
+  escaped <- FALSE
+  for (p in strsplit(dev, "/", fixed = TRUE)[[1L]]) {
+    if (p == "..") {
+      if (!length(parts)) escaped <- TRUE
+      parts <- head(parts, -1L)
+    } else if (nzchar(p) && p != ".") {
+      parts <- c(parts, p)
+    }
+  }
+  if (escaped || !length(parts)) {
+    stop("fleet-ci: ", yml, " development destination ", dQuote(dev, FALSE),
+         " is not a directory inside the destination", call. = FALSE)
+  }
+  paste(parts, collapse = "/")
+}
+
+# The pages job's destination rules, as docs gates that only warn: a
+# refused destination or development destination is recorded with exit 0
+# and a WARNING, so a package on an earlier fleet-ci keeps passing its gate.
+# The pages job itself refuses.
+check_pages_dst <- function() {
+  ok <- TRUE
+  for (what in c("destination", "development destination")) {
+    say("docs: pkgdown ", what)
+    t0 <- Sys.time()
+    fn <- if (what == "destination") fleet_pages_dst else fleet_pages_devdst
+    res <- tryCatch(fn(), error = function(e) e)
+    msg <- if (inherits(res, "error")) {
+      paste0("WARNING: ", conditionMessage(res), "; the pages job will refuse it")
+    } else {
+      paste0("pkgdown ", what, " ", res)
+    }
+    say("docs: ", msg)
+    status$gates[[length(status$gates) + 1L]] <<- list(
+      kind = "docs", cmd = msg, exit = 0L,
+      seconds = round(as.numeric(difftime(Sys.time(), t0, units = "secs")), 1)
+    )
+    ok <- ok && !inherits(res, "error")
+  }
+  invisible(ok)
+}
+
+# The pkgdown config files pkgdown 2.x reads, as fleet_pkgdown_config() lists them.
+pkgdown_cfgs <- c("_pkgdown.yml", "_pkgdown.yaml", "pkgdown/_pkgdown.yml", "pkgdown/_pkgdown.yaml",
+                  "inst/_pkgdown.yml", "inst/_pkgdown.yaml")
+
 if (step == "docs") {
   for (cmd in cfg$docs_gates) run_gate("docs", cmd)
-  if (file.exists("_pkgdown.yml")) {
+  if (any(file.exists(pkgdown_cfgs))) {
+    check_pages_dst()
     run_gate("docs", "Rscript -e 'pkgdown::check_pkgdown()'")
   }
   save_status()
@@ -171,7 +326,8 @@ pak::lockfile_install(file.path(out, "pkg.lock"), lib = run_lib, update = TRUE)
 say("dependencies installed into the private run library ", run_lib)
 
 for (cmd in cfg$docs_gates) run_gate("docs", cmd, run_lib)
-if (file.exists("_pkgdown.yml")) {
+if (any(file.exists(pkgdown_cfgs))) {
+  check_pages_dst()
   run_gate("docs", "Rscript -e 'pkgdown::check_pkgdown()'", run_lib)
 }
 for (cmd in cfg$cheap_gates) run_gate("cheap", cmd, run_lib)
