@@ -33,26 +33,34 @@ docs_gates:
 #   (SEOR-nwfmerhu); lintr; the NEWS heading against the version;
 # - every declared URL (the gate's R CMD check runs with remote incoming, and
 #   so its URL check, off);
-# - punycoder built with libidn2: the assertion fails when the run library's
-#   punycoder lacks it, so the gate is never silently the cell without it
-#   (SEOR-hxxxkmws);
 # - the locale-relevant tests under LC_ALL=C, asserted to have run
-#   (RURL-izzuenjx). The whole suite under C is t2-locale's.
+#   (RURL-izzuenjx). The whole suite under C is t2-locale's;
+# - the tests that need the source tree, from it (their R CMD check skips
+#   are allowed below).
+# First, punycoder rebuilt from source in the run library and asserted to
+# carry libidn2 (SEOR-hxxxkmws): the dependency install takes Posit Package
+# Manager's binary, built without it, and R CMD check below runs against
+# the rebuilt one.
 cheap_gates:
+  - Rscript scripts/punycoder-backend.R "$R_LIBS" libidn2
   - Rscript tools/verify.R --gates
   - Rscript scripts/check-docs-drift.R .
   - Rscript -e 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }'
   - sh scripts/check-news-version.sh
   - Rscript scripts/check-urls.R
-  - Rscript -e 'b <- punycoder:::.backend_info(); print(b); if (!isTRUE(b$has_libidn2)) stop("punycoder was built without libidn2, so this gate is not the libidn2 cell (SEOR-hxxxkmws)", call. = FALSE)'
   - LC_ALL=C LANG=C Rscript tools/check-locale-tests.R
+  - Rscript tools/check-source-tests.R
 
 # test-strings-base.R and test-invalid-utf8-batch.R switch LC_CTYPE to
-# en_US.UTF-8 and skip when it is missing, and tests/testthat.R selects it.
-# The gate runs as the invoking user and reads compiled locales from its own
-# LOCPATH only (fleet-ci README, "A known local/CI difference: locales").
+# en_US.UTF-8, and test-scheme-policy.R to tr_TR.UTF-8 and az_AZ.UTF-8 (the
+# dotless-i case folds), and each skips when its locale is missing;
+# tests/testthat.R selects en_US.UTF-8. The gate runs as the invoking user
+# and reads compiled locales from its own LOCPATH only (fleet-ci README, "A
+# known local/CI difference: locales").
 locales:
   - en_US.UTF-8
+  - tr_TR.UTF-8
+  - az_AZ.UTF-8
 
 # The gate runs R CMD check with NOT_CRAN=true, so skip_on_cran() no longer
 # keeps these out of it. T2 runs both, as osv-audit and security-audit.
@@ -61,6 +69,17 @@ exclude_tests:
     why: queries osv.dev over the network; the osv-audit job runs it in T2
   - path: tests/testthat/test-security.R
     why: queries Sonatype OSS Index with credentials the gate does not have; the security-audit job runs it in T2
+
+# Every skip R CMD check's test run may report; any other fails the gate.
+# Each reads the source tree, which an installed-package check lacks; the
+# cheap gate tools/check-source-tests.R runs them from the source tree.
+allowed_skips:
+  - reason: tools/oracle/derive-ip-obfuscation.R is not reachable from this run
+    why: test-uts46-transcription-pin.R (two tests) reads tools/; tools/check-source-tests.R runs it
+  - reason: register not present in an installed check
+    why: test-url-join.R reads design/work/url-v3/registers/; tools/check-source-tests.R runs it
+  - reason: package sources not available
+    why: test-stringi-bool-key-query.R reads R/; tools/check-source-tests.R runs it
 
 # The top-level .md files the pkgdown site publishes; every other one (the
 # agent files among them) is moved out before build_site() (SEOR-wqxhftpv).

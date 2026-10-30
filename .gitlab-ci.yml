@@ -20,12 +20,13 @@ variables:
   # punycoder's configure builds its libidn2 backend when pkg-config finds
   # libidn2, as on CRAN's Debian flavors, and rurl's tests can behave
   # differently there: rurl 3.1.0's first upload failed CRAN's Debian
-  # pre-test on exactly that (RURL-woljcpfu). So the release legs
-  # (t2-check-release, t2-ascran, coverage) and the local gate run on the
-  # image with libidn2; .fleet-ci.yml's `variant` must name the same image.
-  # The build without libidn2, as on CRAN's Windows flavors, is
-  # x-check-no-idn2 below, plus the oldrel, devel, floor and locale legs,
-  # which run on fleet-r (SEOR-hxxxkmws).
+  # pre-test on exactly that (RURL-woljcpfu). The local gate runs on the image
+  # with libidn2 and rebuilds punycoder there (.fleet-ci.yml), and its
+  # `variant` must equal this, so the release legs (t2-check-release,
+  # t2-ascran, coverage) run on fleet-r-idn2 too. They install punycoder's
+  # Posit Package Manager binary, which is built without libidn2, so they
+  # check the fallback build, as the oldrel, devel, floor and locale legs do;
+  # x-check-no-idn2 below asserts that build (SEOR-hxxxkmws; design/ci.md).
   FLEET_RELEASE_VARIANT: "fleet-r-idn2"
   # rurl has no compiled code of its own, and never had a sanitizer leg.
   FLEET_SANITIZERS: "false"
@@ -40,9 +41,11 @@ variables:
   FLEET_FLOOR_SNAPSHOT: "https://packagemanager.posit.co/cran/__linux__/focal/2026-10-28"
 
 # punycoder built without libidn2, at the release R version: the cell CRAN's
-# Windows flavors build (SEOR-hxxxkmws). The assertion fails the job when the
-# library it checks against holds a punycoder with libidn2, so this job is
-# never silently the libidn2 cell; the local gate asserts the opposite.
+# Windows flavors build (SEOR-hxxxkmws). scripts/punycoder-backend.R rebuilds
+# punycoder from source on fleet-r, which has no libidn2-dev, and fails the
+# job unless the build reports the fallback backend, so this job is never
+# silently the libidn2 cell; the local gate does the same on fleet-r-idn2
+# and asserts the opposite.
 x-check-no-idn2:
   extends: .t2-job
   image: $FLEET_RELEASE_IMAGE
@@ -56,7 +59,7 @@ x-check-no-idn2:
   before_script:
     - !reference [.fleet-r, before_script]
   script:
-    - fleet-tools Rscript -e '.libPaths(c(Sys.getenv("FLEET_RUN_LIB"), .libPaths())); b <- punycoder:::.backend_info(); print(b); if (!identical(b$has_libidn2, FALSE)) stop("punycoder was built with libidn2, so this job is not the cell without it (SEOR-hxxxkmws)", call. = FALSE)'
+    - fleet-tools Rscript scripts/punycoder-backend.R "$FLEET_RUN_LIB" fallback
     - !reference [.fleet-scripts, check]
   artifacts:
     when: always
