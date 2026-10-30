@@ -5,22 +5,25 @@ Rules that apply to one kind of task. `AGENTS.md` points here; the house
 
 ## Hook setup, per clone
 
-- `pre-commit install --hook-type pre-push --hook-type post-merge`. The
-  pre-push stage runs the verify gate; post-merge refreshes the `backup`
-  mirror.
-- The pre-push hook skips the gate when pushing to a local-path mirror
-  (`tools/verify-on-push.sh` header). The skip is not a way to push
-  unverified work.
-- `tools/verify-manifest.yml` holds the gate list. Moving or deleting it
-  breaks the gate.
+- `pre-commit install` (the pre-commit, pre-push and post-merge hooks), then
+  `.fleet-ci/pre-push --install`, which puts fleet-ci's local gate in front
+  of pre-commit's pre-push stage. post-merge refreshes the `backup` mirror.
+- The gate has no destination predicate: it runs for every remote. Only the
+  owner pushes `backup`, with `--no-verify` (AGENTS.md).
+- `tools/verify-manifest.yml` holds the manifest gate list, which the gate
+  runs through `tools/verify.R --gates`. Moving or deleting it breaks the
+  gate.
 
 ## Reading a gate run
 
-- The delivery bar is `Rscript tools/verify.R`. `--fast` does not meet it,
-  and neither does `devtools::test()`, which ignores `Collate:` and runs
-  against the source tree.
-- Judge a run by `0 failed` and the `VERDICT` line, not the step count. A
-  passing step discards its output, so check for warnings with `--verbose`.
+- The delivery bar is `.fleet-ci/gate auto` (or the push itself) passing.
+  `Rscript tools/verify.R --gates` runs only the manifest gates, and
+  `devtools::test()` ignores `Collate:` and runs against the source tree.
+- The gate prints each gate's exit, the R CMD check summary and the test
+  skip count; any skip not on `.fleet-ci.yml`'s `allowed_skips` fails it.
+  Inside the manifest-gate step, judge by `0 failed` and the `VERDICT` line;
+  a passing step discards its output, so check for warnings with
+  `Rscript tools/verify.R --gates --verbose`.
 
 ## Tests that reach into pslr, punycoder or raddr
 

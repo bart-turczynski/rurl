@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Local verify gate (RURL-mvsxmyww).
+# The manifest-gate runner (RURL-mvsxmyww).
 #
 # WHY THIS EXISTS. Every gate this repository owns ran in exactly one place --
 # GitHub Actions -- so when pushing stopped, verification stopped with it. The
@@ -10,6 +10,22 @@
 # gates were red, one of them for days. `devtools::test()` was green throughout.
 # That is the whole point: a green test suite is not a green package, and the
 # only instrument that knows the difference is a real build plus check.
+#
+# WHERE IT RUNS NOW. This script was the whole pre-push gate: the manifest
+# gates, lint, spelling, docs drift, `R CMD check --as-cran` and the test
+# suite under LC_ALL=C. Since the move to fleet-ci's tiers (seor ADR 0012) the
+# merge gate is fleet-ci's local gate, `.fleet-ci/gate`, which runs in the
+# fleet image from the pre-push hook and reads its steps from `.fleet-ci.yml`.
+# That gate runs lint, spelling, docs drift and the check itself, and runs
+# this script as one of its cheap gates (`Rscript tools/verify.R --gates`) for
+# the part only rurl has: the gates `tools/verify-manifest.yml` declares and
+# their self-tests. The locale cell became `tools/check-locale-tests.R`, a
+# positive assertion over the locale-relevant tests, and the whole suite
+# under LC_ALL=C is fleet-ci's `t2-locale` job.
+#
+# The gate runs it on an export of the pushed commit that has no `.git`, so
+# self-test selection cannot diff against main there and runs every
+# self-test (see "self-test selection" below).
 #
 # THE GATE LIST IS DERIVED, NOT TRANSCRIBED. The gate steps below are read out
 # of tools/verify-manifest.yml at run time. A hand-maintained copy would be
@@ -23,7 +39,7 @@
 # under tools/ and deleted the dead GitHub workflows around it. It keeps the
 # GitHub-Actions `jobs:`/`steps:` shape because that shape is what this
 # parser reads and what carries each gate's rationale; no forge executes it.
-# `.gitlab-ci.yml` runs this script, so GitLab consumes the same manifest.
+# The fleet-ci gate runs this script, so it consumes the same manifest.
 #
 # GATE SELF-TESTS ARE A SEPARATE RISK CLASS. Their positive/negative fixtures
 # prove the verifier, not the product, so routine runs select one only when the
@@ -31,36 +47,20 @@
 # (the `changes` job's `filters:` block), or the self-test's own script. A
 # self-test that maps to no filter is selected and named, never skipped (see
 # "self-test selection" below). `--release` deliberately runs every self-test,
-# and so does a run that cannot tell what changed. The real tree scans still
-# run in every complete local gate.
+# and so does a run that cannot tell what changed, which is every run in the
+# fleet-ci gate's export. The real tree scans run every time.
 #
 # WHAT IT DOES NOT COVER, stated so nobody reads a green run as more than it is:
-#   * cross-platform and multi-R-version checks -- this runs one platform,
-#     one R. Multi-R runs only in the `deep-check` schedule's `full-check` and
-#     `floor-check` jobs in .gitlab-ci.yml; cross-platform and rhub run
-#     nowhere since their GitHub workflows were deleted;
-#   * README.md re-render (the manifest's `readme` job), coverage,
-#     news-version, and the determinism matrix (pkgdown is the `pages` job in
-#     .gitlab-ci.yml, on every push to `main`) -- all need network, a
-#     pandoc/LaTeX toolchain, or a Docker matrix;
-#   * the OSV and OSS Index advisory audits (test-osv.R, test-security.R).
-#     The locale cell EXCLUDES them by name and `R CMD check` skips them
-#     (NOT_CRAN unset), so no stage here runs them -- see stage_locale();
-#   * the C7 curl clean room, which needs its own R CMD check against a poisoned
-#     library. `--release` adds it; the default does not, because it doubles the
-#     slowest stage to re-prove a criterion that only matters at release.
+# everything but the manifest gates and their self-tests. Lint, spelling,
+# docs drift, `R CMD check` and the locale tests are the fleet-ci gate's
+# (`.fleet-ci.yml`); the R-version matrix, the floor, the whole suite under
+# LC_ALL=C, coverage and the OSV and OSS Index audits are its T2 jobs
+# (`.gitlab-ci.yml`, design/ci.md). `--release` adds the C7 curl clean room,
+# which needs its own R CMD check against a poisoned library and only matters
+# at release.
 #
-# It is not a strict subset of the manifest in either direction, so neither
-# "green here means green there" nor its converse holds. The check stage runs
-# `--as-cran`, which is STRICTER than the manifest's `check` job (that one
-# passes `--no-manual` alone and left `--as-cran` to the deleted full-check
-# workflow), so this can fail where that job would have passed. A pass here
-# means "the fast gate's checks hold on this machine" -- not "the release is
-# ready", and not "CI will be green".
-#
-# STAGE ORDER is cheapest-first, so a broken tree fails in seconds rather than
-# after a five-minute check. Stages are independent: a failure does not stop the
-# run, because knowing all of what is broken beats knowing the first thing.
+# Stages are independent: a failure does not stop the run, because knowing all
+# of what is broken beats knowing the first thing.
 #
 # WARNING-ONLY SIGNALS (RURL-pbihchti). A step's output is printed only when it
 # FAILS, so anything real that does not change an exit status is structurally
@@ -80,29 +80,19 @@
 # log matches it, the matched block prints under a `!` marker. Quiet when there
 # is nothing to say, loud exactly when there is -- so the known-hazardous step
 # is honest by default rather than opt-in, and opt-in is precisely how
-# `aajradge` stayed hidden. The check stage has done this ad hoc for WARNING and
-# NOTE lines since it was written; `watch` is that idea, named and reusable.
+# `aajradge` stayed hidden.
 #
 # Usage:
-#   Rscript tools/verify.R            # gates + relevant self-tests + full gate
-#   Rscript tools/verify.R --gates    # gates + relevant self-tests ONLY
-#   Rscript tools/verify.R --fast     # the above plus lint and spelling
-#   Rscript tools/verify.R --release  # everything, plus the curl clean room
+#   Rscript tools/verify.R --gates    # gates + relevant self-tests (what the
+#                                     # fleet-ci gate runs; also the default)
+#   Rscript tools/verify.R --release  # the above, plus the curl clean room
 #   Rscript tools/verify.R --verbose  # print every step's log, passing included
 #   Rscript tools/verify.R --list     # print the stage plan, and the
 #                                     # self-tests this diff selects, and exit
 #   Rscript tools/verify.R --self-test  # prove the two instruments above,
 #                                       # and self-test selection
-# `--fast` is iteration feedback only. It is never sufficient verification for
-# a behavioral slice; the unsuffixed command remains the end-of-slice gate.
-#
-# `--gates` exists for CI on a compute-minutes budget: the gate family needs
-# almost no installed packages and runs in about a minute, where the check stage
-# needs the full toolchain and every dependency. It lets a pipeline run the
-# cheap half on every push and the whole thing on the default branch WITHOUT
-# hand-listing the gates in a CI config -- which is the drift this script exists
-# to prevent (see "THE GATE LIST IS DERIVED, NOT TRANSCRIBED" above). Like
-# `--fast`, it is not sufficient verification for a behavioral slice.
+# None of these is the delivery bar: that is `.fleet-ci/gate auto`, which runs
+# this script among its cheap gates.
 #
 # Base R, plus `yaml` to read the self-tests' paths filters; without `yaml`,
 # self-test selection falls back to each script's own path and says so. Exits 1
@@ -123,8 +113,6 @@ MANIFEST <- "tools/verify-manifest.yml"
 # other.
 
 args <- commandArgs(trailingOnly = TRUE)
-opt_gates <- "--gates" %in% args
-opt_fast <- "--fast" %in% args
 opt_release <- "--release" %in% args
 opt_list <- "--list" %in% args
 opt_verbose <- "--verbose" %in% args
@@ -133,10 +121,11 @@ opt_self_test <- "--self-test" %in% args
 # ---- helpers ----------------------------------------------------------------
 
 repo_root <- function() {
-  # `.git` is a directory in a clone and a FILE in a `git worktree`; both are
-  # repositories, and subagents run the gate from worktrees.
-  if (!file.exists("DESCRIPTION") || !file.exists(".git")) {
-    stop("run this from the repository root", call. = FALSE)
+  # The package root, found by its DESCRIPTION and the manifest. Not by
+  # `.git`: the fleet-ci gate runs this on an export of the pushed commit,
+  # which has none.
+  if (!file.exists("DESCRIPTION") || !file.exists(MANIFEST)) {
+    stop("run this from the package root", call. = FALSE)
   }
   normalizePath(".")
 }
@@ -173,9 +162,10 @@ git_lines <- function(args) {
 }
 
 # The self-test selection diffs against main, so main has to EXIST. GitLab CI
-# checks out a shallow, single-ref clone: no local `main`, no `origin/main`, and
-# `git diff main...HEAD` is a fatal bad revision. That took down the whole gates
-# job after all 14 gates had passed.
+# checked out a shallow, single-ref clone: no local `main`, no `origin/main`,
+# and `git diff main...HEAD` is a fatal bad revision. That took down the whole
+# gates job after all 14 gates had passed. The fleet-ci gate's export has no
+# repository at all, which lands here too.
 #
 # Returning NULL means "cannot tell", which is NOT the same as "nothing
 # changed" -- and the difference matters, because the two answers select
@@ -247,8 +237,8 @@ changed_files <- function() {
 # A self-test runs when the diff touches a path in the paths filter that gates
 # it in the manifest, not only its own script: the `changes` job declares one
 # filter per self-test, and a self-test can be the only check on a file other
-# than its script (tools/local-ci-plan.R --self-test is the only one on
-# tools/local-ci.sh). The chain is the step running
+# than its script (tools/verify.R --self-test is the only one on the
+# manifest's self-test mapping). The chain is the step running
 # `Rscript <script> --self-test` -> the `needs.changes.outputs.<filter>` its
 # `if:` names (the step's own, else its job's) -> that filter's path list.
 # The two functions below are pure over a parsed manifest, so the self-test
@@ -487,215 +477,6 @@ stage_self_tests <- function(root) {
   })
 }
 
-stage_lint <- function() {
-  cat("[lint] lintr::lint_package()\n")
-  code <- paste(
-    "l <- lintr::lint_package()",
-    "if (length(l)) { print(l); quit(status = 1) }",
-    "cat('0 lints\n')",
-    sep = "; "
-  )
-  list(run_step("lintr::lint_package()", "Rscript", c("-e", shQuote(code))))
-}
-
-# Spelling (SEOR-mtbzfroz). `R CMD check` spell-checks DESCRIPTION only when an
-# English aspell/hunspell dictionary is installed, and on a machine without one
-# it skips the check without a word -- so a typo first surfaced as win-builder's
-# NOTE, after submission. spelling::spell_check_package() bundles its own
-# dictionaries and also covers man/, vignettes and NEWS.md. Words it does not
-# know but that are real go in inst/WORDLIST; a typo gets fixed at its source.
-stage_spelling <- function() {
-  cat("[spelling] spelling::spell_check_package()\n")
-  code <- paste(
-    "bad <- spelling::spell_check_package()",
-    "if (nrow(bad)) { print(bad); quit(status = 1) }",
-    "cat('0 misspelled words\n')",
-    sep = "; "
-  )
-  list(run_step("spelling::spell_check_package()", "Rscript",
-                c("-e", shQuote(code))))
-}
-
-# Generated-docs drift (SEOR-nwfmerhu). man/ and NAMESPACE are roxygen output,
-# and a stale .Rd is still valid .Rd, so lint and R CMD check both pass it: the
-# logo sweep left man/rurl-package.Rd stale and nothing here noticed (fixed by
-# hand in rurl !176). scripts/check-docs-drift.R regenerates and diffs; read its
-# header for why it uses roxygen's default loader.
-#
-# IT JUDGES THE COMMIT BEING PUSHED, not the working tree, unlike the stages
-# around it. What reaches the remote is the commit; a man/ fix that sits
-# uncommitted on disk does not, so letting it pass would push stale docs.
-# pre-commit exports the pushed commit as $PRE_COMMIT_TO_REF for a pre-push
-# hook, and tools/verify-on-push.sh hands its environment straight through.
-# With several refs in one push, pre-commit names only the first one it would
-# check. A hand run, or a push pre-commit treats as --all-files (a history
-# with no commit on the remote), sets nothing, and HEAD is checked instead. In
-# CI the checked-out commit is HEAD, but the r-base `check` job skips this
-# stage (VERIFY_SKIP_DOCS=docs-drift-job) because the pinned roxygen2 is not
-# a Debian binary; its own `docs-drift` job runs the script there. Only that
-# exact value skips: any other one, say a value left over in a developer's
-# shell, is reported and ignored, so it cannot drop the stage from a push
-# that still reads PASS.
-#
-# It runs on a THROWAWAY EXPORT of that commit (`git archive`), never in
-# `root`: on drift the script rewrites man/ and NAMESPACE where it runs, and
-# `root` is what the check stage below builds from and what a push must not
-# dirty. The export touches no index, ref or stash, so it needs no committer
-# identity and cannot race another git process for index.lock. on.exit()
-# removes it on every path out of this function, failure included.
-stage_docs <- function(root) {
-  skip <- Sys.getenv("VERIFY_SKIP_DOCS")
-  if (identical(skip, "docs-drift-job")) {
-    cat(paste0(
-      "[docs] SKIPPED: VERIFY_SKIP_DOCS=docs-drift-job. Nothing here checks ",
-      "man/ or NAMESPACE; CI's docs-drift job runs scripts/check-docs-drift.R\n"
-    ))
-    return(list())
-  }
-  if (nzchar(skip)) {
-    cat(sprintf(paste0(
-      "[docs] VERIFY_SKIP_DOCS=%s ignored: only CI's `docs-drift-job` ",
-      "value skips this stage\n"
-    ), skip))
-  }
-  ref <- Sys.getenv("PRE_COMMIT_TO_REF")
-  if (!nzchar(ref)) {
-    ref <- "HEAD"
-  }
-  cat(sprintf("[docs] scripts/check-docs-drift.R on an export of %s\n",
-              if (identical(ref, "HEAD")) "HEAD" else
-                paste("the pushed commit", substr(ref, 1L, 12L))))
-  work <- tempfile("docs-drift-")
-  on.exit(unlink(work, recursive = TRUE), add = TRUE)
-  export <- file.path(work, "tree")
-  dir.create(export, recursive = TRUE)
-  tarball <- file.path(work, "tree.tar")
-  # `^{commit}` makes a ref that names no commit fail here, by name, rather
-  # than as an empty export the drift check would then misread.
-  exported <- run_step(
-    sprintf("git archive %s (docs export)", substr(ref, 1L, 12L)), "sh",
-    c("-c", shQuote(sprintf(
-      "git archive --format=tar -o %s %s && tar -xf %s -C %s",
-      shQuote(tarball), shQuote(paste0(ref, "^{commit}")), shQuote(tarball),
-      shQuote(export)
-    )))
-  )
-  if (!exported$ok) {
-    return(list(exported))
-  }
-  list(exported, run_step(
-    "check-docs-drift.R (man/, NAMESPACE vs roxygen)", "Rscript",
-    c(shQuote(file.path(root, "scripts", "check-docs-drift.R")),
-      shQuote(export))
-  ))
-}
-
-# The load-bearing stage, and the one no `devtools::test()` can stand in for.
-# `R CMD check` must run on a BUILT TARBALL: building is what reads `Collate:`,
-# and checking the tarball is what runs the tests against an INSTALLED package,
-# where the file layout differs from the source tree. Both defects that got
-# through were invisible to any instrument that skipped one of those two steps.
-#
-# THROUGH rcmdcheck, failing on a WARNING (error_on; the fleet standard, seor
-# design/fleet-standard.md, "CI on every push to main"). rcmdcheck builds the
-# tarball and checks it, so the built-tarball property above holds. It stops
-# on a WARNING itself, and the guard after it fails on R CMD check's own exit
-# status, because rcmdcheck reads a check that halted partway as 0/0/0 and
-# returns normally (SEOR-maavnxdm). The 00check.log scan below stays as the
-# printed summary and as a second WARNING tripwire.
-stage_check <- function(root) {
-  cat("[check] rcmdcheck: R CMD build + R CMD check --as-cran",
-      "(on the tarball, failing on a WARNING)\n")
-  # NOT under tempfile(): R deletes its session tempdir on exit, which would
-  # take 00check.log with it -- so the one run you actually want to read, the
-  # one that flagged something, is the one whose evidence is already gone.
-  dir <- file.path(root, "_scratch", "verify-check")
-  unlink(dir, recursive = TRUE)
-  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-  code <- paste(
-    sprintf(paste(
-      "res <- rcmdcheck::rcmdcheck(%s, args = c('--no-manual', '--as-cran'),",
-      "build_args = '--no-manual', error_on = 'warning', check_dir = %s)"
-    ), deparse(root), deparse(dir)),
-    paste(
-      "if (!identical(as.integer(res$status), 0L)) stop('R CMD check exited",
-      "with status ', res$status, '; the run did not complete.', call. = FALSE)"
-    ),
-    sep = "; "
-  )
-  # _R_CHECK_SYSTEM_CLOCK_: a network-restricted machine cannot reach the time
-  # server, and the resulting "unable to verify current time" NOTE is about the
-  # sandbox, not the package. Set it for a local `R CMD check` too if you hit
-  # that NOTE off-network; it is not needed on a machine with normal access.
-  chk <- run_step("R CMD check --as-cran", "Rscript", c("-e", shQuote(code)),
-                  env = "_R_CHECK_SYSTEM_CLOCK_=false")
-  out <- file.path(dir, "rurl.Rcheck", "00check.log")
-  if (file.exists(out)) {
-    log <- readLines(out, warn = FALSE)
-    # `R CMD check` exits 0 on a WARNING, so exit status alone is not the
-    # verdict. NOTEs are reported but tolerated: several are unavoidable here
-    # (the `Remotes` field, and every github.com URL 404s while the account is
-    # suspended), and failing on them would make the gate cry wolf.
-    flagged <- grep("^\\* checking .*(WARNING|NOTE)$", log, value = TRUE)
-    if (length(flagged)) {
-      cat(paste0("       ", flagged, collapse = "\n"), "\n", sep = "")
-    }
-    if (any(grepl("WARNING", flagged, fixed = TRUE)) && chk$ok) {
-      cat("  FAIL check reported a WARNING (exit status alone does not)\n")
-      chk$ok <- FALSE
-    }
-    cat(paste0("       ", grep("^Status:", log, value = TRUE), collapse = "\n"),
-        "\n", sep = "")
-    cat("       full log: ", sub(paste0("^", root, "/?"), "", out), "\n",
-        sep = "")
-  }
-  list(chk)
-}
-
-# testthat's summary reporter heads its warning section with a rule of box
-# characters -- BUT it degrades that rule to plain `=` when the locale cannot
-# represent U+2550, which is exactly the locale this step forces. Both spellings
-# have to match or the watch is vacuous in the only step that carries it.
-# Written as an escape, not as the literal character: this file is source that
-# gets parsed in whatever locale the runner happens to be in.
-TESTTHAT_WARNINGS <- "^(=|\u2550){2} Warnings"
-
-# The manifest's `Tests (LC_ALL=C)` cell. It is here rather than in the check
-# stage because R CMD check runs in the ambient locale: a defect that only
-# appears under a non-UTF-8 charset is invisible to every other stage, and this
-# codebase has shipped that exact class of defect before (RURL-kmpnbvdl).
-#
-# It is also the step with a KNOWN warning-only signal: RURL-aajradge is a
-# testthat WARN that reproduces under Linux/C and changes no exit status, so
-# this step reports PASS and drops it. Hence the `watch` -- the summary reporter
-# emits a warnings section only when there are warnings, so this prints nothing
-# on a clean run and the whole section when there is one.
-#
-# It EXCLUDES the two third-party advisory audits, test-security.R (OSS Index)
-# and test-osv.R (OSV) (SEOR-fftbjnpl). test_local() sets NOT_CRAN=true, so
-# their skip_on_cran() does not fire here, and ~/.Renviron puts the OSS Index
-# credentials in scope -- so both ran live on every push, and a new upstream
-# advisory blocked an unrelated push on 2026-09-09. An advisory is a fact about
-# the world, not about the tree being pushed. `filter` matches the context name
-# (the file name minus `test-` and `.R`); testthat passes `invert` through to
-# the same file filter. Nothing runs the audits automatically after this; run
-# them deliberately with testthat::test_local(filter = "^(security|osv)$").
-stage_locale <- function() {
-  cat("[locale] test suite under LC_ALL=C\n")
-  code <- paste(
-    "stopifnot(identical(Sys.getlocale('LC_CTYPE'), 'C'))",
-    paste(
-      "testthat::test_local(reporter = 'summary', stop_on_failure = TRUE,",
-      "filter = '^(security|osv)$', invert = TRUE)"
-    ),
-    sep = "; "
-  )
-  list(run_step("testthat under LC_ALL=C", "Rscript",
-                c("-e", shQuote(code)),
-                env = c("LC_ALL=C", "LANG=C"),
-                watch = TESTTHAT_WARNINGS))
-}
-
 stage_release <- function() {
   cat("[release] curl zero-reference clean room (C7)\n")
   list(run_step("curl-zero-gate.R (full, incl. C7)", "Rscript",
@@ -706,10 +487,10 @@ stage_release <- function() {
 
 # Self-test selection (RURL-etafkksg). A self-test is selected when the diff
 # touches a path in the paths filter that gates it in the manifest, not only
-# its own script: tools/local-ci-plan.R --self-test holds the only checks on
-# tools/local-ci.sh. The fixture is a manifest in miniature, parsed with the
-# same reader as the real one, and the last two cases read the REAL manifest so
-# that an edit breaking the mapping goes red here.
+# its own script: this runner's own self-test checks the manifest's mapping,
+# so a manifest edit must select it. The fixture is a manifest in miniature,
+# parsed with the same reader as the real one, and the last two cases read the
+# REAL manifest so that an edit breaking the mapping goes red here.
 selection_cases <- function(case) {
   if (!requireNamespace("yaml", quietly = TRUE)) {
     return(list(case(
@@ -811,9 +592,9 @@ selection_cases <- function(case) {
         all(vapply(real_cmds, covers, logical(1)))
     ),
     case(
-      "REAL manifest: a tools/local-ci.sh change selects its planner's test",
-      real_ok && isTRUE(select_self_tests(real, "tools/local-ci.sh")[[
-        "tools/local-ci-plan.R --self-test"
+      "REAL manifest: a manifest change selects this runner's own test",
+      real_ok && isTRUE(select_self_tests(real, MANIFEST)[[
+        "tools/verify.R --self-test"
       ]])
     )
   )
@@ -851,7 +632,7 @@ self_test <- function() {
   block <- watch_block(
     c("noise", "== Warnings ====", "1. a test ('t.R:6:3') - the message",
       "== DONE ===="),
-    TESTTHAT_WARNINGS
+    "^== Warnings"
   )
 
   cases <- list(
@@ -883,21 +664,6 @@ self_test <- function() {
       "the watch marker says PASSED, so a `!` block is not read as failure",
       grepl("PASSED but its output matched",
             step(0L, verbose = FALSE, watch = canary), fixed = TRUE)
-    ),
-    # The locale step's pattern, against both spellings testthat can emit. A
-    # watch that only matched the UTF-8 rule would be VACUOUS in the one step
-    # that carries it, since that step forces the locale which degrades it.
-    case(
-      "TESTTHAT_WARNINGS matches the C-locale (ASCII) header",
-      grepl(TESTTHAT_WARNINGS, "== Warnings =========")
-    ),
-    case(
-      "TESTTHAT_WARNINGS matches the UTF-8 header",
-      grepl(TESTTHAT_WARNINGS, "\u2550\u2550 Warnings \u2550\u2550\u2550")
-    ),
-    case(
-      "TESTTHAT_WARNINGS does not match the section that always prints",
-      !grepl(TESTTHAT_WARNINGS, "== DONE =========")
     ),
     case(
       "a watch hit prints the entries UNDER the header, not it alone",
@@ -932,12 +698,6 @@ if (opt_self_test) {
 
 root <- repo_root()
 plan <- c("gates", "selftests")
-if (!opt_gates) {
-  plan <- c(plan, "lint", "spelling")
-}
-if (!opt_gates && !opt_fast) {
-  plan <- c(plan, "docs", "check", "locale")
-}
 if (opt_release) {
   plan <- c(plan, "release")
 }
@@ -953,7 +713,7 @@ if (opt_list) {
   quit(status = 0)
 }
 
-cat("rurl local verify gate --", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
+cat("rurl manifest gates --", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
 cat("stages:", paste(plan, collapse = " -> "), "\n\n")
 
 results <- list()
@@ -962,11 +722,6 @@ for (st in plan) {
     st,
     gates = stage_gates(root),
     selftests = stage_self_tests(root),
-    lint = stage_lint(),
-    spelling = stage_spelling(),
-    docs = stage_docs(root),
-    check = stage_check(root),
-    locale = stage_locale(),
     release = stage_release()
   ))
   cat("\n")
@@ -983,5 +738,5 @@ if (length(failed)) {
             collapse = ", "), "\n")
   quit(status = 1)
 }
-cat("VERDICT: PASS (this machine, this R -- see the header for what is not",
+cat("VERDICT: PASS (the manifest gates only -- see the header for what is not",
     "covered)\n")

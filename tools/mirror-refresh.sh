@@ -10,14 +10,19 @@
 # full ~36-step verify gate, because the pre-push hook had no destination
 # predicate, so an archival push cost minutes AND rewrote `tests/testthat/_snaps/`
 # and byte-pinned fixtures in the working tree. A refresh that expensive is a
-# refresh you postpone. RURL-qkowfsdt removed that cost.
+# refresh you postpone. RURL-qkowfsdt removed that cost with a pre-push wrapper
+# that skipped the gate for a local-path destination.
 #
-# So this script pushes with a PLAIN `git push` -- no `--no-verify`. That is
-# deliberate. `tools/verify-on-push.sh` already recognizes a local-path
-# destination and skips the gate for it, and letting the push go through the
-# hook is what keeps that predicate exercised. `--no-verify` here would work by
-# defeating the gate rather than composing with it, and would go on "working"
-# unchanged on the day the predicate breaks.
+# That wrapper went with the old verify hook. The pre-push hook is now
+# fleet-ci's local gate (.fleet-ci/pre-push), which gates every pushed ref
+# and has no destination predicate. It also refuses what an archival push
+# carries: a ref whose commit predates the fleet-ci migration (no
+# .fleet-ci.yml), which is every older branch `--all` pushes, and a push to
+# main that adds more than one first-parent merge. So every push below is
+# `git push --no-verify`: the mirror only receives history this clone already
+# holds, and main's has passed the gate on its way to origin. This is the
+# owner's backup push, which AGENTS.md reserves to the owner; the hook fires it
+# after a merge in the owner's clone.
 #
 # THE MECHANISM CHOSEN, of the three the issue allowed (post-merge/post-commit
 # hook, scheduled job, documented manual step):
@@ -41,10 +46,10 @@
 # about false confidence:
 #
 #   * IT IS NOT AUTOMATIC IN A FRESH CLONE. It is installed per clone, with
-#     `pre-commit install --hook-type post-merge`, exactly like the verify gate
-#     is installed with `--hook-type pre-push`. Committing the config does not
-#     install anything. This is the same opt-in weakness `tools/local-ci.sh`
-#     names in its own header, and it is not fixable from inside a repository.
+#     `pre-commit install --hook-type post-merge`, exactly like the gate is
+#     installed with `.fleet-ci/pre-push --install`. Committing the config
+#     does not install anything, and that is not fixable from inside a
+#     repository.
 #   * IT ONLY FIRES ON A MERGE. `git pull --rebase` runs post-rewrite, not
 #     post-merge; `git fetch` followed by `git reset --hard`, and a plain
 #     `git checkout`, run neither.
@@ -95,8 +100,8 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
 fi
 
 # Collect the mirrors first, by the same URL-is-a-local-directory predicate
-# tools/verify-on-push.sh and tools/mirror-freshness.sh use. No mirror is not an
-# error: a fresh clone has none.
+# tools/mirror-freshness.sh uses. No mirror is not an error: a fresh clone has
+# none.
 MIRRORS=()
 for name in $(git remote); do
   [ "$name" = "$UPSTREAM" ] && continue
@@ -140,10 +145,10 @@ for name in "${MIRRORS[@]}"; do
   # rebased since its last archival push is a non-fast-forward here and is
   # REPORTED, not forced: the mirror's copy of that tip may be the only one
   # left, and overwriting it would destroy the thing being backed up.
-  if ! git push "$name" --all; then
+  if ! git push --no-verify "$name" --all; then
     echo "mirror-refresh: WARNING pushing all local heads to '$name' did not fully succeed (a rebased branch is the usual cause). Nothing was forced; the mirror keeps its copy." >&2
   fi
-  if ! git push "$name" --tags; then
+  if ! git push --no-verify "$name" --tags; then
     echo "mirror-refresh: WARNING pushing tags to '$name' did not fully succeed." >&2
   fi
   # Archive anchors live under refs/archive/, which is neither heads nor tags,
@@ -151,7 +156,7 @@ for name in "${MIRRORS[@]}"; do
   # refspec that matches nothing is an error, and a clone that never fetched
   # refs/archive/* has nothing to add.
   if [ -n "$(git for-each-ref --count=1 refs/archive)" ] &&
-     ! git push "$name" 'refs/archive/*:refs/archive/*'; then
+     ! git push --no-verify "$name" 'refs/archive/*:refs/archive/*'; then
     echo "mirror-refresh: WARNING pushing refs/archive/* to '$name' did not fully succeed." >&2
   fi
 
@@ -164,7 +169,7 @@ for name in "${MIRRORS[@]}"; do
     git cat-file -e "$mirror_main^{commit}" 2>/dev/null &&
     git merge-base --is-ancestor "$UPSTREAM_SHA" "$mirror_main"; then
     echo "mirror-refresh: '$name' refs/heads/main already contains $UPSTREAM/main"
-  elif ! git push "$name" "$UPSTREAM_REF:refs/heads/main"; then
+  elif ! git push --no-verify "$name" "$UPSTREAM_REF:refs/heads/main"; then
     echo "mirror-refresh: FAIL could not advance '$name' refs/heads/main to $UPSTREAM/main (${UPSTREAM_SHA:0:8}). Not forcing -- resolve by hand." >&2
     FAILED=1
   fi

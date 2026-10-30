@@ -1,6 +1,22 @@
-# Pre-commit gate, mirroring CI. Install with `pre-commit install` (pre-commit
-# hooks), `pre-commit install --hook-type pre-push` (the verify hook below) and
-# `pre-commit install --hook-type post-merge` (the archival-mirror refresh).
+# The hygiene hooks, at commit and at push, and the archival-mirror refresh
+# after a merge. Install with `pre-commit install` (all three hook types, from
+# default_install_hook_types below), then `.fleet-ci/pre-push --install`,
+# which replaces pre-commit's pre-push hook with fleet-ci's: that hook runs
+# the fleet-ci local gate (.fleet-ci/gate, settings in .fleet-ci.yml) on each
+# pushed ref, then this file's pre-push stage. The gate itself (the manifest
+# gates, docs drift, lintr, spelling, the URL check, R CMD check and the
+# locale tests) is in .fleet-ci.yml, never here: this file must not run
+# .fleet-ci/gate (fleet-ci README, "The local gate").
+#
+# Over fleet-ci's hook, `pre-commit install` and
+# `pre-commit install --hook-type pre-push` without -f move it to
+# hooks/pre-push.legacy (pre-commit's migration mode), which still runs the
+# gate first. `pre-commit install -f` (every type, from
+# default_install_hook_types) and `pre-commit install -f --hook-type pre-push`
+# delete it and drop the gate; `-f --hook-type pre-commit` and
+# `-f --hook-type post-merge` leave it alone. Re-run
+# `.fleet-ci/pre-push --install` after either of the two.
+default_install_hook_types: [pre-commit, pre-push, post-merge]
 #
 # air (the R formatter) is intentionally NOT wired up here: this package has not
 # adopted air (no air.toml), so enabling it would reformat the whole source tree
@@ -24,8 +40,9 @@ repos:
       # OWNS those bytes and rewrites them on every run, passing runs included.
       # Its writer ends the file with a blank line, which end-of-file-fixer then
       # strips -- so the committed form was one the suite could never reproduce,
-      # every local test run left the tree dirty, and the pre-push verify hook
-      # failed with "files were modified by this hook" even on a green gate.
+      # every local test run left the tree dirty, and the former pre-push
+      # verify hook failed with "files were modified by this hook" even on a
+      # green gate.
       #
       # inst/LICENSE.psl is UPSTREAM-OWNED text (RUL-008): the Mozilla Public
       # License 2.0 as the Public Suffix List ships it, carried verbatim under
@@ -48,21 +65,28 @@ repos:
       # ("`expected`: TRUE "), so a fixer pass silently edits the evidence and
       # the transcript stops matching the log it cites.
       #
+      # .fleet-ci/ is fleet-ci's bin/vendor output, which seor's fleet checker
+      # requires byte for byte; re-run bin/vendor rather than editing it.
+      #
       # Design prose and registers are deliberately NOT here: they are authored,
       # so the fixers own their whitespace like any other source file. The
       # exception above is recorded output that happens to live under design/.
       - id: end-of-file-fixer
-        exclude: &fixer-excludes '^(tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$|design/win-builder-logs/)'
+        exclude: &fixer-excludes '^(\.fleet-ci/|tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$|design/win-builder-logs/)'
       - id: trailing-whitespace
         exclude: *fixer-excludes
       - id: check-merge-conflict
+      # --unsafe: syntax only. .gitlab-ci.yml's x-* jobs use GitLab's
+      # `!reference` tag, which PyYAML's safe loader cannot construct. GitLab's
+      # CI lint API and fleet-ci's bin/rules-sim read that file in full.
       - id: check-yaml
+        args: [--unsafe]
       - id: mixed-line-ending
         exclude: *fixer-excludes
       - id: check-case-conflict
   # British spellings in code, comments, string literals, tooling and design
-  # prose, which spelling::spell_check_package() (the verify gate's spelling
-  # stage) never reads: it covers DESCRIPTION, roxygen, vignettes, README and
+  # prose, which spelling::spell_check_package() (the fleet-ci gate's docs
+  # gate) never reads: it covers DESCRIPTION, roxygen, vignettes, README and
   # NEWS only (SEOR-xtmnpmae; seor design/fleet.md "Prose language"). Only the
   # en-GB_to_en-US dictionary is enabled, so this is not a general typo
   # checker. codespell skips dotfiles unless given --check-hidden, so
@@ -85,6 +109,7 @@ repos:
   #     (design/AGENTS.md): never updated, not current authority. evidence/
   #     also holds the tracker snapshot, recorded text regenerated wholesale.
   #   .bestpractices.json -- mirrors the live bestpractices.dev entry.
+  #   .fleet-ci/ -- fleet-ci's bin/vendor output.
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:
@@ -92,44 +117,28 @@ repos:
         name: codespell (British spellings, en-GB_to_en-US; SEOR-xtmnpmae)
         args: [--builtin, en-GB_to_en-US]
         stages: [pre-commit, pre-push]
-        exclude: '^(man/|tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$|design/win-builder-logs/|design/work/url-v3/(decisions|evidence|worklog)/|\.bestpractices\.json$)'
+        exclude: '^(\.fleet-ci/|man/|tests/testthat/fixtures/|tests/testthat/_snaps/|inst/bench/wpt-url-cases\.json$|inst/LICENSE\.psl$|analysis/.*\.csv$|analysis/.*/run-console\.txt$|design/win-builder-logs/|design/work/url-v3/(decisions|evidence|worklog)/|\.bestpractices\.json$)'
   - repo: local
     hooks:
-      # Mirrors the CI fast gate. Runs on push (not per commit) since a full
-      # build + check is slow.
-      #
-      # The command used to be spelled inline here as lintr + rcmdcheck. It now
-      # delegates to tools/verify.R, which additionally runs the ~20 gate steps
-      # this hook never covered -- and those are the ones that actually rotted:
-      # four gates were simultaneously red on an integration branch while lint
-      # and the test suite stayed green (RURL-mvsxmyww). Keeping the definition
-      # in a committed script rather than a YAML string also means it can be run
-      # by hand, listed with --list, and reviewed as code.
-      #
-      # `entry` points at tools/verify-on-push.sh, NOT at tools/verify.R
-      # directly, and that indirection is the whole point (RURL-qkowfsdt). The
-      # wrapper reads the DESTINATION REMOTE that pre-commit re-exports as
-      # $PRE_COMMIT_REMOTE_URL and skips the gate when the destination is a
-      # directory on this filesystem -- i.e. the local archival mirror
-      # `backup`, where the gate verifies nothing (that history already passed
-      # on its way to origin), costs minutes, and rewrites _snaps/ and fixture
-      # bytes in the working tree. Everything else, `origin` included, runs the
-      # full gate unchanged; anything the wrapper cannot positively identify as
-      # a local mirror also runs it. Read the wrapper's header before changing
-      # the predicate -- this is a scoped skip, not a hole.
-      #
-      # `always_run: true` STAYS. The predicate that was missing is the remote,
-      # not the file set: for origin this hook must fire regardless of what
-      # changed.
-      # Toolchain drift makes the gate red on a tree nobody changed, and it
-      # arrives disguised as a code defect: a roxygen2 skew aborts the docs
-      # guard, and a package built under a newer R than this one surfaces as an
-      # R CMD check WARNING minutes into the expensive step below. This is
-      # quick (one request, for CRAN's package index, which the check for a
-      # dependency older than CRAN's reads: SEOR-hxxxkmws), and it runs ahead
-      # of that step so the machine is
-      # named as the cause in one line rather than found by elimination
-      # (SEOR-tcytizic).
+      # Warns, loudly, when this clone's pre-push hook is not fleet-ci's, so
+      # the push ran without the gate. Warn-only by decision, time-boxed until
+      # the hook is installed fleet-wide, then it fails. It only reads the
+      # hook file; it never runs .fleet-ci/gate.
+      - id: fleet-ci-hook-installed
+        name: fleet-ci pre-push hook is installed (warn-only)
+        entry: sh scripts/check-fleet-hook.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+        stages: [pre-push]
+      # This machine's R toolchain against what the package pins: roxygen2
+      # against Config/roxygen2/version, installed packages built under a newer
+      # R, and the local pandoc against the fleet image's (.fleet-ci/toolchain),
+      # so a local devtools::document() or build_readme() writes what the gate
+      # accepts. The gate itself runs in the fleet image and does not depend
+      # on this machine's library. Quick: one request, for CRAN's package
+      # index (SEOR-hxxxkmws, SEOR-tcytizic).
       - id: check-toolchain
         name: toolchain matches what this package pins
         entry: Rscript scripts/check-toolchain.R
@@ -137,29 +146,6 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
-      # The fleet standard's URL check (seor design/fleet-standard.md, "Local
-      # pre-push gate"), copied from punycoder. It fetches every URL the
-      # package declares and fails on a dead one, which `verify`'s --as-cran
-      # reports only as a NOTE. A network blip never rejects a push; zero URLs
-      # checked fails; nothing is exempt (seor ADR 0011). Ahead of `verify`,
-      # so a dead link is reported in seconds rather than after the full
-      # check.
-      - id: check-urls
-        name: declared URLs resolve
-        entry: Rscript scripts/check-urls.R
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-      - id: verify
-        name: verify (mirrors CI's fast gate)
-        entry: tools/verify-on-push.sh
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-        verbose: true
-
       # CITATION.cff `version:` and .zenodo.json `"version"` must name the
       # release DESCRIPTION's Version names (X.Y.Z.9000 -> X.Y.Z), and every
       # URL they declare must also appear in DESCRIPTION's URL: field. Ported
@@ -232,11 +218,13 @@ repos:
       # so a failure is loud but not blocking. The non-optional half is
       # tools/mirror-freshness.sh, which exits non-zero on drift.
       #
-      # The script pushes with a PLAIN `git push`, no `--no-verify`: the
-      # pre-push wrapper above already skips the gate for a local-path
-      # destination, and routing through it keeps that predicate exercised.
-      # Nothing is ever force-pushed or pruned -- the mirror holds refs found
-      # nowhere else (design/backup-mirror.md).
+      # The script pushes with `git push --no-verify`: the mirror receives
+      # only history this clone already holds, and fleet-ci's gate refuses
+      # what an archival push carries (branches from before the fleet-ci
+      # migration, a push to main adding more than one merge). Only the owner
+      # pushes backup that way (AGENTS.md). Nothing is ever force-pushed or
+      # pruned -- the mirror holds refs found nowhere else
+      # (design/backup-mirror.md).
       - id: mirror-refresh
         name: refresh the local archival mirror
         entry: tools/mirror-refresh.sh

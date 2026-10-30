@@ -9,11 +9,11 @@ to GitHub (configured on the GitLab project, not a remote in this clone), but
 for protected branches only, which today is `main`. Neither holds a local-only
 branch, or a tip rewritten or deleted after its push. Outside the working clone,
 this mirror is the only copy of those. A branch also has **no server-side
-gate**: the `.gitlab-ci.yml` `workflow:` rules run pipelines for `main`, tags
-and hand-started runs only (the quota pause, RURL-utsbwfvc, is lifted). That
-makes the mirror's freshness load-bearing — and makes a mirror that is stale
-*without saying so* worse than no mirror at all, because absence is at least
-honest.
+gate**: fleet-ci's template runs no pipeline for a branch, a merge request or
+a push to `main`, only the weekly deep-check, release runs and `v*` tags
+([ci.md](ci.md)). That makes the mirror's freshness load-bearing — and
+makes a mirror that is stale *without saying so* worse than no mirror at all,
+because absence is at least honest.
 
 ## How it stays fresh
 
@@ -21,7 +21,7 @@ honest.
 |---|---|
 | Refresh | `tools/mirror-refresh.sh`, wired as a pre-commit **`post-merge`** hook (`.pre-commit-config.yaml`, id `mirror-refresh`) |
 | Check | `tools/mirror-freshness.sh` — **exits non-zero** when a mirror's `refs/heads/main` does not contain the forge's `main` |
-| Install | `pre-commit install --hook-type post-merge` (alongside `--hook-type pre-push` for the verify gate) |
+| Install | `pre-commit install` (its `default_install_hook_types` include `post-merge`), alongside `.fleet-ci/pre-push --install` for the gate |
 
 By hand, any time:
 
@@ -30,9 +30,16 @@ tools/mirror-freshness.sh            # exit 0 = fresh, exit 1 = drifted
 tools/mirror-refresh.sh              # refresh, then assert it took
 ```
 
-Both find the mirror by the same predicate `tools/verify-on-push.sh` uses — a
-remote whose **URL is a directory on this filesystem** — not by the name
-`backup`, which is a local alias anyone can rename.
+Both find the mirror by the same predicate — a remote whose **URL is a
+directory on this filesystem** — not by the name `backup`, which is a local
+alias anyone can rename.
+
+**The refresh pushes with `--no-verify`.** fleet-ci's gate runs for every
+remote and refuses what an archival push carries: every ref from before the
+fleet-ci migration (no `.fleet-ci.yml`) and a push to `main` that adds more
+than one merge. The mirror receives only history the clone already holds,
+and `main`'s passed the gate on its way to `origin`. Only the owner pushes
+`backup` (AGENTS.md); an agent asks first, as for any gate bypass.
 
 **What the hook does not guarantee.** It is installed per clone, so a fresh
 clone has it only once someone runs `pre-commit install`; it fires on `git
@@ -187,7 +194,9 @@ git config remote.backup.tagOpt --no-tags
 **New anchors go under `refs/archive/`, never `refs/tags/`:**
 `git update-ref refs/archive/<name> <commit>` and
 `git push origin 'refs/archive/<name>'`. That push goes to a remote, so the
-pre-push hook runs the full gate for it (minutes), as for any push to `origin`.
+pre-push hook runs fleet-ci's gate for it, as for any push to `origin`; an
+anchor at a commit from before the fleet-ci migration has no `.fleet-ci.yml`,
+and the gate refuses it, so only the owner pushes one, with `--no-verify`.
 A push cannot delete a tag protected by the `v*` rule (GitLab: "You can only
 delete protected tags using the web interface"), and one such ref makes GitLab
 reject every ref in that push, so a wrong tag costs more to remove than to

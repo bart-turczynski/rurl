@@ -15,7 +15,7 @@
 # check EXITS NON-ZERO on drift. A version that only printed would reproduce the
 # failure mode it exists to remove.
 #
-# WHAT COUNTS AS A MIRROR: the same predicate `tools/verify-on-push.sh` uses --
+# WHAT COUNTS AS A MIRROR: the same predicate `tools/mirror-refresh.sh` uses --
 # a remote whose URL is a DIRECTORY ON THIS FILESYSTEM. Not a remote named
 # `backup`; a name is a local alias anyone can `git remote rename`, and keying
 # on the string would silently detach this check from the thing it checks. The
