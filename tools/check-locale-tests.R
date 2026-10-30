@@ -1,31 +1,36 @@
 #!/usr/bin/env Rscript
 #
-# The locale-relevant tests under LC_ALL=C, as a positive assertion
-# (RURL-izzuenjx, RURL-kmpnbvdl). A cheap gate of the fleet-ci local gate's
-# full tier (.fleet-ci.yml), run as:
+# The test suite under LC_ALL=C, with a positive assertion on the
+# locale-relevant files (RURL-izzuenjx, RURL-kmpnbvdl). A cheap gate of the
+# fleet-ci local gate's full tier (.fleet-ci.yml), run as:
 #
 #   LC_ALL=C LANG=C Rscript tools/check-locale-tests.R
 #
 # rurl's output must not depend on LC_CTYPE: the same input gives the same
 # values and the same Encoding() marks under a UTF-8 locale and under C. The
-# full tier's R CMD check runs the suite under C.UTF-8, so a defect that only
-# appears under a non-UTF-8 charset is invisible there. This runs the test
-# files that exercise the charset (the contract in test-locale-invariance.R,
-# the base-R string layer, latin1 and invalid UTF-8 input, the encoding
-# fixtures) under C. It replaces tools/verify.R's former locale stage, which
-# reran the whole suite under C on every push; the whole-suite C run is now
-# fleet-ci's t2-locale job, in T2 (the weekly deep-check and every release).
+# full tier's R CMD check runs the suite under C.UTF-8, and fleet-ci's
+# t2-locale leg, though it sets LC_ALL=C, runs it through tests/testthat.R,
+# which selects en_US.UTF-8, so a defect that only appears under a
+# non-UTF-8 charset is invisible to both. This is the run that sees it: the
+# whole suite under C through testthat::test_local(), which does not source
+# tests/testthat.R, as tools/verify.R's former locale stage (the manifest's
+# `Tests (LC_ALL=C)` cell) did on every push.
+#
+# It EXCLUDES the two third-party advisory audits, test-security.R (OSS
+# Index) and test-osv.R (OSV) (SEOR-fftbjnpl): an advisory is a fact about
+# the world rather than about the tree. test_local() sets NOT_CRAN=true, so
+# their skip_on_cran() would not keep them out. T2's osv-audit and
+# security-audit jobs run them.
 #
 # POSITIVE, not merely "no failure": it fails unless
 #   * the session really is in the C locale (LC_CTYPE "C", not UTF-8): an
 #     LC_ALL that never reached R would otherwise pass vacuously;
-#   * every file named below exists, so a rename cannot drop one silently;
-#   * every one of them ran at least one passing expectation, with no
-#     failure, no error and no skip. A skip would mean a locale the test asks
-#     for is missing: list it in .fleet-ci.yml's `locales`.
-#
-# test-osv.R and test-security.R are not in the list: they audit third-party
-# advisories, a fact about the world rather than about the tree.
+#   * no test anywhere in the suite failed or errored;
+#   * every locale-relevant file named below exists, so a rename cannot drop
+#     one silently, and ran at least one passing expectation with no skip.
+#     A skip there would mean a locale the test asks for is missing: list it
+#     in .fleet-ci.yml's `locales`. Skips elsewhere are reported, not fatal,
+#     as in the former cell.
 
 FILES <- c(
   "test-locale-invariance.R",
@@ -55,33 +60,41 @@ if (!all(present)) {
   fail("missing test file(s): ", paste(FILES[!present], collapse = ", "))
 }
 
-contexts <- sub("^test-", "", sub("[.][Rr]$", "", FILES))
-filter <- paste0("^(", paste(gsub(".", "\\.", contexts, fixed = TRUE),
-                              collapse = "|"), ")$")
-res <- testthat::test_local(".", filter = filter, reporter = "summary",
-                            stop_on_failure = FALSE)
+t0 <- Sys.time()
+res <- testthat::test_local(".", filter = "^(security|osv)$", invert = TRUE,
+                            reporter = "summary", stop_on_failure = FALSE)
+secs <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
 df <- as.data.frame(res)
 
-per_file <- lapply(FILES, function(f) {
-  rows <- df[df$file == f, , drop = FALSE]
+tally <- function(rows) {
   c(passed = sum(rows$passed), failed = sum(rows$failed),
     skipped = sum(rows$skipped), error = sum(rows$error))
-})
-names(per_file) <- FILES
+}
+
+whole <- tally(df)
+cat(sprintf(paste("check-locale-tests: whole suite, %d file(s): passed %d",
+                  "failed %d  skipped %d  error %d  (%.0fs)\n"),
+            length(unique(df$file)), whole[["passed"]], whole[["failed"]],
+            whole[["skipped"]], whole[["error"]], secs))
+broken <- unique(df$file[df$failed > 0 | df$error])
+if (length(broken)) {
+  fail("under LC_ALL=C, these file(s) failed or errored: ",
+       paste(broken, collapse = ", "))
+}
 
 bad <- character(0)
 for (f in FILES) {
-  n <- per_file[[f]]
+  n <- tally(df[df$file == f, , drop = FALSE])
   cat(sprintf("check-locale-tests: %-36s passed %4d  failed %d  skipped %d  error %d\n",
               f, n[["passed"]], n[["failed"]], n[["skipped"]], n[["error"]]))
-  if (n[["passed"]] < 1L || n[["failed"]] || n[["skipped"]] || n[["error"]]) {
+  if (n[["passed"]] < 1L || n[["skipped"]]) {
     bad <- c(bad, f)
   }
 }
 if (length(bad)) {
-  fail("under LC_ALL=C, these did not run clean with at least one passing ",
-       "expectation: ", paste(bad, collapse = ", "))
+  fail("under LC_ALL=C, these locale-relevant file(s) did not run clean with ",
+       "at least one passing expectation: ", paste(bad, collapse = ", "))
 }
-cat("check-locale-tests: PASS: ", length(FILES), " file(s), ",
-    sum(vapply(per_file, `[[`, numeric(1), "passed")),
-    " expectation(s) under LC_ALL=C\n", sep = "")
+cat("check-locale-tests: PASS: the whole suite (", whole[["passed"]],
+    " expectation(s)) under LC_ALL=C, ", length(FILES),
+    " locale-relevant file(s) asserted\n", sep = "")

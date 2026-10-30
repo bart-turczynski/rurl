@@ -45,8 +45,9 @@
 # WHAT THIS DOES NOT GUARANTEE -- stated plainly, because the issue it closes is
 # about false confidence:
 #
-#   * IT IS NOT AUTOMATIC IN A FRESH CLONE. It is installed per clone, with
-#     `pre-commit install --hook-type post-merge`, exactly like the gate is
+#   * IT IS NOT AUTOMATIC IN A FRESH CLONE. It is installed per clone: a plain
+#     `pre-commit install` arms it, because `.pre-commit-config.yaml`'s
+#     `default_install_hook_types` lists post-merge, just as the gate is
 #     installed with `.fleet-ci/pre-push --install`. Committing the config
 #     does not install anything, and that is not fixable from inside a
 #     repository.

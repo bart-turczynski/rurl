@@ -25,8 +25,9 @@ variables:
   # `variant` must equal this, so the release legs (t2-check-release,
   # t2-ascran, coverage) run on fleet-r-idn2 too. They install punycoder's
   # Posit Package Manager binary, which is built without libidn2, so they
-  # check the fallback build, as the oldrel, devel, floor and locale legs do;
-  # x-check-no-idn2 below asserts that build (SEOR-hxxxkmws; design/ci.md).
+  # check the fallback build, as the oldrel, devel, floor and locale legs do,
+  # and are the fallback cell; x-check-idn2 below rebuilds punycoder with
+  # libidn2 and asserts it (SEOR-hxxxkmws; design/ci.md).
   FLEET_RELEASE_VARIANT: "fleet-r-idn2"
   # rurl has no compiled code of its own, and never had a sanitizer leg.
   FLEET_SANITIZERS: "false"
@@ -40,17 +41,17 @@ variables:
   FLEET_FLOOR_R: "4.1.3"
   FLEET_FLOOR_SNAPSHOT: "https://packagemanager.posit.co/cran/__linux__/focal/2026-10-28"
 
-# punycoder built without libidn2, at the release R version: the cell CRAN's
-# Windows flavors build (SEOR-hxxxkmws). scripts/punycoder-backend.R rebuilds
-# punycoder from source on fleet-r, which has no libidn2-dev, and fails the
-# job unless the build reports the fallback backend, so this job is never
-# silently the libidn2 cell; the local gate does the same on fleet-r-idn2
-# and asserts the opposite.
-x-check-no-idn2:
+# punycoder built with libidn2, at the release R version: the cell CRAN's
+# Debian flavors build (SEOR-hxxxkmws, RURL-woljcpfu). It runs on the global
+# FLEET_RELEASE_VARIANT, fleet-r-idn2, and scripts/punycoder-backend.R
+# rebuilds punycoder from source there and fails the job unless the build
+# reports the libidn2 backend, so this job is never silently the fallback
+# cell. The local gate does the same before every push; this is the cell's
+# run in CI. The fallback cell is the template's release legs above.
+x-check-idn2:
   extends: .t2-job
   image: $FLEET_RELEASE_IMAGE
   variables:
-    FLEET_RELEASE_VARIANT: "fleet-r"
     NOT_CRAN: "true"
     _R_CHECK_CRAN_INCOMING_: "false"
     _R_CHECK_CRAN_INCOMING_REMOTE_: "false"
@@ -59,7 +60,7 @@ x-check-no-idn2:
   before_script:
     - !reference [.fleet-r, before_script]
   script:
-    - fleet-tools Rscript scripts/punycoder-backend.R "$FLEET_RUN_LIB" fallback
+    - fleet-tools Rscript scripts/punycoder-backend.R "$FLEET_RUN_LIB" libidn2
     - !reference [.fleet-scripts, check]
   artifacts:
     when: always
@@ -74,9 +75,13 @@ x-check-no-idn2:
 # the project `.fossa.yml` names and reads `FOSSA_API_KEY`, a masked CI/CD
 # variable only the owner can set. The CLI comes from FOSSA's official
 # install script, which picks the linux/arm64 build on this runner.
+#
+# allow_failure: a FOSSA outage or a missing key must not fail the pipeline
+# and so block `pages` (deploy stage) on a v* tag; the job still shows red.
 x-fossa:
   extends: .t2-job
   image: debian:stable-slim
+  allow_failure: true
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates git
     - 'curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash'

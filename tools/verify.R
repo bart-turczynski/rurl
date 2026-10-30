@@ -19,9 +19,11 @@
 # That gate runs lint, spelling, docs drift and the check itself, and runs
 # this script as one of its cheap gates (`Rscript tools/verify.R --gates`) for
 # the part only rurl has: the gates `tools/verify-manifest.yml` declares and
-# their self-tests. The locale cell became `tools/check-locale-tests.R`, a
-# positive assertion over the locale-relevant tests, and the whole suite
-# under LC_ALL=C is fleet-ci's `t2-locale` job.
+# their self-tests. The locale cell became `tools/check-locale-tests.R`,
+# another of those cheap gates: the whole suite under LC_ALL=C, with a
+# positive assertion over the locale-relevant tests. (fleet-ci's `t2-locale`
+# sets LC_ALL=C too, but its R CMD check runs `tests/testthat.R`, which
+# selects en_US.UTF-8, so its tests do not run under C.)
 #
 # The gate runs it on an export of the pushed commit that has no `.git`, so
 # self-test selection cannot diff against main there and runs every
@@ -52,9 +54,9 @@
 #
 # WHAT IT DOES NOT COVER, stated so nobody reads a green run as more than it is:
 # everything but the manifest gates and their self-tests. Lint, spelling,
-# docs drift, `R CMD check` and the locale tests are the fleet-ci gate's
-# (`.fleet-ci.yml`); the R-version matrix, the floor, the whole suite under
-# LC_ALL=C, coverage and the OSV and OSS Index audits are its T2 jobs
+# docs drift, `R CMD check` and the suite under LC_ALL=C are the fleet-ci
+# gate's (`.fleet-ci.yml`); the R-version matrix, the floor, the locale leg,
+# coverage and the OSV and OSS Index audits are its T2 jobs
 # (`.gitlab-ci.yml`, design/ci.md). `--release` adds the C7 curl clean room,
 # which needs its own R CMD check against a poisoned library and only matters
 # at release.
@@ -113,6 +115,21 @@ MANIFEST <- "tools/verify-manifest.yml"
 # other.
 
 args <- commandArgs(trailingOnly = TRUE)
+# Any other flag is an error, not ignored: the former runner's --fast no
+# longer exists, and a run that silently dropped it would read as the gate it
+# used to run. A bare run says what it covers, once.
+known <- c("--gates", "--release", "--list", "--verbose", "--self-test")
+unknown <- setdiff(args, known)
+if (length(unknown)) {
+  stop("tools/verify.R: unknown or retired flag(s) ",
+       paste(unknown, collapse = " "), "; it runs the manifest gates only (",
+       paste(known, collapse = " "), "). The full gate is ",
+       "`.fleet-ci/gate auto`.", call. = FALSE)
+}
+if (!length(args)) {
+  cat("tools/verify.R: the manifest gates only; the full gate is",
+      "`.fleet-ci/gate auto`\n")
+}
 opt_release <- "--release" %in% args
 opt_list <- "--list" %in% args
 opt_verbose <- "--verbose" %in% args

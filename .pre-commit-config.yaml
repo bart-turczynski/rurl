@@ -76,11 +76,16 @@ repos:
       - id: trailing-whitespace
         exclude: *fixer-excludes
       - id: check-merge-conflict
-      # --unsafe: syntax only. .gitlab-ci.yml's x-* jobs use GitLab's
-      # `!reference` tag, which PyYAML's safe loader cannot construct. GitLab's
-      # CI lint API and fleet-ci's bin/rules-sim read that file in full.
+      # Every YAML file but .gitlab-ci.yml through PyYAML's safe loader.
       - id: check-yaml
+        exclude: ^\.gitlab-ci\.yml$
+      # .gitlab-ci.yml with --unsafe: syntax only. Its x-* jobs use GitLab's
+      # `!reference` tag, which the safe loader cannot construct. GitLab's CI
+      # lint API and fleet-ci's bin/rules-sim read that file in full.
+      - id: check-yaml
+        name: check yaml (.gitlab-ci.yml, syntax only)
         args: [--unsafe]
+        files: ^\.gitlab-ci\.yml$
       - id: mixed-line-ending
         exclude: *fixer-excludes
       - id: check-case-conflict

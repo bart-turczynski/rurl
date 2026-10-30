@@ -6,15 +6,21 @@ version: 1
 # The image the gate runs in. fleet-r-idn2 carries libidn2, so punycoder can
 # build its libidn2 backend, as on CRAN's Debian flavors, where rurl 3.1.0's
 # first upload failed (RURL-woljcpfu). It must be .gitlab-ci.yml's
-# FLEET_RELEASE_VARIANT. The build without libidn2 is T2's (x-check-no-idn2).
+# FLEET_RELEASE_VARIANT. T2 runs the libidn2 cell again (x-check-idn2); the
+# build without libidn2 is T2's release legs, which install Posit Package
+# Manager's binary.
 variant: fleet-r-idn2
 
-# Allowlisted paths that a gate here reads, so a change to them is never
-# docs-only. tools/verify.R runs the manifest gates, and they validate the
-# records under design/work/url-v3/ (validate-records, traceability,
-# citation, deferral, release-rule, oracle-label, oracle-provenance) and
-# resolve ADR numbers against design/adr/. tools/pkgdown-reference-gate.R and
-# scripts/check-bugreports.py read _pkgdown.yml.
+# Paths on the classifier's docs allowlist that a full-tier cheap gate reads,
+# so a change to them gets the full tier: T0 runs only spelling and
+# check_pkgdown(), which would pass a change that breaks one of these gates.
+# The manifest gates (tools/verify.R) validate the records under
+# design/work/url-v3/ (validate-records, traceability, citation, deferral,
+# release-rule, oracle-label, oracle-provenance), and validate-records
+# resolves ADR numbers against design/adr/; the manifest's
+# tools/pkgdown-reference-gate.R checks _pkgdown.yml's reference index
+# against the exports. (scripts/check-bugreports.py also reads _pkgdown.yml,
+# but it is a pre-commit pre-push hook and runs on every push, either tier.)
 docs_exclude:
   - design/work/url-v3/**
   - design/adr/**
@@ -33,8 +39,11 @@ docs_gates:
 #   (SEOR-nwfmerhu); lintr; the NEWS heading against the version;
 # - every declared URL (the gate's R CMD check runs with remote incoming, and
 #   so its URL check, off);
-# - the locale-relevant tests under LC_ALL=C, asserted to have run
-#   (RURL-izzuenjx). The whole suite under C is t2-locale's;
+# - the whole suite (bar the two audits) under LC_ALL=C, through
+#   test_local(), with the locale-relevant files asserted to have run
+#   (RURL-izzuenjx). It is the only non-UTF-8 test run: t2-locale sets
+#   LC_ALL=C, but R CMD check runs tests/testthat.R, which selects
+#   en_US.UTF-8;
 # - the tests that need the source tree, from it (their R CMD check skips
 #   are allowed below).
 # First, punycoder rebuilt from source in the run library and asserted to

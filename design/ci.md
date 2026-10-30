@@ -10,8 +10,8 @@ settings, and `.fleet-ci/` is fleet-ci's vendored gate (re-run fleet-ci's
 | --- | --- | --- |
 | hygiene hooks | pre-commit, at commit and at push | `.pre-commit-config.yaml`. At commit and again at push: the hygiene fixers (end of file, trailing whitespace, line endings), the large-file, merge-conflict, YAML and case-conflict checks, and codespell. At push only: the citation, BugReports, NEWS and toolchain checks, the `check-news.py` and `bestpractices-url.py` self-tests when those scripts change, and the warn-only `fleet-ci-hook-installed` check. After a merge: the `backup` mirror refresh |
 | T0 | every push whose diff against `main` is docs-only (`design/**/*.md` and the like, minus `.fleet-ci.yml`'s `docs_exclude`), locally, the pre-push hook | the gate's docs tier, `.fleet-ci/gate` in the fleet image (`fleet-r-idn2`): spelling and `pkgdown::check_pkgdown()` |
-| T1 | every other push, locally, the pre-push hook | the gate's full tier: T0's checks, then punycoder rebuilt from source with libidn2 and asserted (`scripts/punycoder-backend.R`), the manifest gates and their self-tests (`tools/verify.R --gates`), docs drift, lintr, the NEWS heading, the URL check, the locale-relevant tests under `LC_ALL=C` (`tools/check-locale-tests.R`), the tests that need the source tree, from it (`tools/check-source-tests.R`), and one `R CMD check --as-cran` (incoming checks off) against the rebuilt punycoder |
-| T2 | the weekly `deep-check` schedule; every T3 run | `t2-check-release`, `t2-check-oldrel`, `t2-check-devel`, `t2-floor` (R 4.1.3), `t2-locale` (the whole suite under `LC_ALL=C`), `t2-ascran`, `coverage` (fails below 95%), `osv-audit`, `security-audit`, `citation-version`, and rurl's `x-check-no-idn2` (punycoder rebuilt without libidn2, asserted) and `x-fossa` (`fossa analyze`) |
+| T1 | every other push, locally, the pre-push hook | the gate's full tier: T0's checks, then punycoder rebuilt from source with libidn2 and asserted (`scripts/punycoder-backend.R`), the manifest gates and their self-tests (`tools/verify.R --gates`), docs drift, lintr, the NEWS heading, the URL check, the test suite under `LC_ALL=C` (`tools/check-locale-tests.R`), the tests that need the source tree, from it (`tools/check-source-tests.R`), and one `R CMD check --as-cran` (incoming checks off) against the rebuilt punycoder |
+| T2 | the weekly `deep-check` schedule; every T3 run | `t2-check-release`, `t2-check-oldrel`, `t2-check-devel`, `t2-floor` (R 4.1.3), `t2-locale` (`R CMD check` under `LC_ALL=C`; its tests run under `en_US.UTF-8`, see the gaps), `t2-ascran`, `coverage` (fails below 95%), `osv-audit`, `security-audit`, `citation-version`, and rurl's `x-check-idn2` (punycoder rebuilt from source with libidn2, asserted) and `x-fossa` (`fossa analyze`, allowed to fail) |
 | T3 | a `RELEASE=1` web pipeline on `main`; a `v*` tag | all of T2 plus `t3-manual`; the tag, or `RELEASE=1` on a tag, adds `pages` |
 
 Pushes to `main` or a branch, merge requests and API pipelines (`glab ci run`)
@@ -74,17 +74,19 @@ These live in GitLab's project settings, so a clone does not carry them:
   `t2-check-release`, `t2-ascran` and `coverage` run on `fleet-r-idn2`
   (`FLEET_RELEASE_VARIANT`, which must equal `.fleet-ci.yml`'s `variant`),
   but they install punycoder as Posit Package Manager's binary, which is
-  built without libidn2. The libidn2 cell is the local gate, which rebuilds
-  punycoder from source in `fleet-r-idn2` and asserts the backend; the
-  fallback cell is asserted in `x-check-no-idn2`. Coverage measures the
-  fallback build.
-- **`t2-locale`'s `LC_ALL=C` leg may run the tests under a UTF-8
+  built without libidn2, as do the oldrel, devel, floor and locale legs.
+  Those legs are the fallback cell; nothing asserts their backend. The
+  libidn2 cell is `x-check-idn2` in T2 and the local gate before every
+  push: each rebuilds punycoder from source in `fleet-r-idn2` and asserts
+  the libidn2 backend. Coverage measures the fallback build.
+- **`t2-locale`'s `LC_ALL=C` leg runs the tests under a UTF-8
   `LC_CTYPE`.** `tests/testthat.R` selects `en_US.UTF-8` when that locale
-  exists, and `t2-locale` builds it from `.fleet-ci.yml`'s `locales`. The
+  exists, and `t2-locale` builds it from `.fleet-ci.yml`'s `locales`, so
+  the leg checks the build and the examples under C but not the tests. The
   former locale cell ran `testthat::test_local()`, which skips that file.
-  The local gate's `tools/check-locale-tests.R` also uses `test_local()` and
-  asserts `LC_CTYPE` is `C`, so the locale-relevant tests do run under C
-  before every push.
+  The local gate's `tools/check-locale-tests.R` does the same: it asserts
+  `LC_CTYPE` is `C` and runs the whole suite (bar the two audits) with
+  `test_local()` before every push, so the non-UTF-8 run is T1's.
 - **The floor leg is unproven.** `t2-floor` installs every dependency,
   `Suggests` included, from one dated snapshot (`FLEET_FLOOR_SNAPSHOT`), and
   rurl's floors (`pslr >= 1.2.2`, on CRAN 2026-10-24; `raddr >= 0.1.2`) put
@@ -96,7 +98,8 @@ These live in GitLab's project settings, so a clone does not carry them:
 - **`pages` deploys from a `v*` tag only**, not on every push to `main`, so
   the site documents the release CRAN serves.
 - **`fossa analyze` runs weekly and at each release** (`x-fossa`), not on
-  every push to `main`.
+  every push to `main`, and is allowed to fail, so a FOSSA outage cannot
+  block `pages` on a tag.
 - **No sanitizer leg** (`FLEET_SANITIZERS: "false"`): rurl has no compiled
   code of its own, and never had one.
 - **`NOT_CRAN=true` in T1 and the T2 check legs.** `skip_on_cran()` tests run

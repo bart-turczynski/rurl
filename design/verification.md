@@ -11,7 +11,7 @@ cannot carry comments.
 | The local gate's steps, docs-tier exclusions, locales, test exclusions and allowed skips | `.fleet-ci.yml` |
 | The manifest-gate runner's modes (`--gates`, `--list`, `--verbose`, `--release`), `watch = <regex>`, and what it does not cover | `tools/verify.R` header |
 | Which manifest gates exist, and each gate's trigger and self-test | `tools/verify-manifest.yml` header |
-| The locale-relevant tests under `LC_ALL=C`, and why the assertion is positive | `tools/check-locale-tests.R` header |
+| The test suite under `LC_ALL=C`, and why the assertion is positive | `tools/check-locale-tests.R` header |
 | The tests R CMD check skips because they read the source tree, run from it | `tools/check-source-tests.R` header |
 | Why the gate rebuilds punycoder from source, and the libidn2 and fallback cells | `scripts/punycoder-backend.R` header |
 | The pinned template, the package's switches and its `x-*` jobs (the libidn2 cells, FOSSA) | `.gitlab-ci.yml` header |

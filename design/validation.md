@@ -20,7 +20,7 @@ Moved from `CONTRIBUTING.md` unchanged (SEOR-ogreubsr).
   `man/` or `NAMESPACE` differ from what the pinned roxygen2 regenerates;
   uncommitted edits do not count, and the fix is `devtools::document()` and a
   commit), the NEWS heading, the URL check, the libidn2 assertion, the
-  locale-relevant tests under `LC_ALL=C` (`tools/check-locale-tests.R`) and
+  test suite under `LC_ALL=C` (`tools/check-locale-tests.R`) and
   `R CMD build` + `R CMD check --as-cran` on the built tarball.
   `Rscript tools/verify.R --gates` runs the manifest gates alone, as
   iteration feedback; `--release` adds the curl clean room.

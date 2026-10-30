@@ -39,8 +39,9 @@ gate by hand on `HEAD`:
 
 The gate checks the committed tree, never uncommitted edits. Its full tier
 runs the manifest gates (`tools/verify.R --gates`), docs drift, lintr,
-spelling, the NEWS heading, the URL check, the libidn2 assertion, the
-locale-relevant tests under `LC_ALL=C` and one `R CMD check --as-cran`.
+spelling, the NEWS heading, the URL check, the libidn2 assertion, the test
+suite under `LC_ALL=C` (`tools/check-locale-tests.R`), the tests that need the
+source tree (`tools/check-source-tests.R`) and one `R CMD check --as-cran`.
 
 The source and test layout, and durable project context, live in
 `ARCHITECTURE.md` and `design/`: CI and the project settings it depends on in

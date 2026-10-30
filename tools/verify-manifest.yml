@@ -21,9 +21,9 @@
 # `tools/verify.R --list` prints what it derives from here. Change the list by
 # editing THIS file. The non-gate jobs below (lint, readme, check, locale,
 # coverage) are a record of how the old workflow was scoped: lint, docs drift,
-# R CMD check and the locale tests now run in the fleet-ci gate
-# (`.fleet-ci.yml`), and the whole suite under LC_ALL=C in fleet-ci's
-# `t2-locale` job.
+# R CMD check and the `locale` job's whole suite under LC_ALL=C
+# (`tools/check-locale-tests.R`) now run in the fleet-ci gate
+# (`.fleet-ci.yml`).
 #
 # Original header: "Fast verification gate: lint + a single Ubuntu R CMD check
 # on every push to main and every PR. Coverage and the specialized evidence

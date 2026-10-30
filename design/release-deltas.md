@@ -28,9 +28,11 @@ rurl's deltas:
   (RURL-woljcpfu). Install the current CRAN punycoder from source with
   libidn2 and run the suite against it, besides the binary build. Then start
   T3 from **Build > Pipelines > Run pipeline**, ref `main`, variable
-  `RELEASE=1`: the release, oldrel, devel and floor checks, the libidn2 and
-  no-libidn2 cells, `t2-ascran`, the locale leg, coverage, the audits and
-  the PDF manual ([ci.md](ci.md)). An API pipeline (`glab ci run`) creates
+  `RELEASE=1`: the release, oldrel, devel and floor checks (punycoder's
+  binary, built without libidn2: the no-libidn2 cell), `x-check-idn2`
+  (punycoder rebuilt from source with libidn2 and asserted: the libidn2
+  cell), `t2-ascran`, the locale leg, coverage, the audits and the PDF
+  manual ([ci.md](ci.md)). An API pipeline (`glab ci run`) creates
   nothing.
 - **Step 14: the concept DOI is `10.5281/zenodo.20972584`.** Its
   `<concept-recid>` in the Zenodo API query is `20972584`.
