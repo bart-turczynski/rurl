@@ -1,0 +1,343 @@
+#!/usr/bin/env python3
+"""bin/classify: the fail-closed docs-vs-full classifier (seor ADR 0012).
+
+    classify [--repo DIR] BASE HEAD       print `docs` or `full` for BASE..HEAD
+    classify --raw FILE [--config FILE]   classify `git diff --raw` lines read from FILE (- = stdin)
+    classify --config-json FILE           validate a .fleet-ci.yml, print it as normalized JSON
+    classify --version                    print CLASSIFIER_VERSION
+
+A push is `docs` only when every changed path is on the docs allowlist, is
+added or modified (status A or M) as a regular file, and is not excluded by
+the repository's .fleet-ci.yml. Anything else is `full`: an unknown path, a
+deletion, a type change, a rename (diffed with --no-renames, a rename is a
+deletion and an addition), a symlink or submodule, a missing base and an
+empty diff. A misclassification costs minutes, never a missed check.
+
+The reasons go to stderr, one per line; stdout carries the tier alone.
+Exit 0 with a tier, 2 on a usage or configuration error (the gate stops).
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import warnings
+
+# Bump on any change to the allowlist or the rules below: the pass stamp
+# (bin/gate) is keyed on it, so a new classifier never reuses an old stamp.
+CLASSIFIER_VERSION = "1"
+
+# stacks/r.md, "Verify tiers": design and docs Markdown and _pkgdown.yml,
+# which .Rbuildignore keeps out of R CMD check; plus the work log and the
+# tracker, which nothing in a check reads. README.md, NEWS.md, vignettes,
+# R/, man/, DESCRIPTION, inst/ and every other top-level .md are full.
+DOCS_ALLOWLIST = (
+    "design/**/*.md",
+    "docs/**/*.md",
+    "_pkgdown.yml",
+    "worklog/**",
+    ".fp/**",
+)
+
+REGULAR_MODES = ("100644", "100755")
+ZERO_MODE = "000000"
+
+# The .fleet-ci.yml schema, version 1. Every key is optional; an unknown key
+# is an error, so a typo never silently drops a setting. allowed_notes alone
+# gets no default: absent (NOTEs never fail) is not the same as [] (every
+# NOTE fails), so the normalized config carries it only when it is set.
+CONFIG_SCHEMA = {
+    "version": "int",
+    "variant": "variant",
+    "manual": "bool",
+    "docs_exclude": "strings",
+    "docs_gates": "strings",
+    "host_gates": "strings",
+    "cheap_gates": "strings",
+    "locales": "strings",
+    "locale_assertions": "strings",
+    "locale_legs": "strings",
+    "exclude_tests": "path_why",
+    "allowed_skips": "reason_why",
+    "allowed_notes": "regexes",
+    "pages_keep": "strings",
+}
+VARIANTS = ("fleet-r", "fleet-r-idn2")
+
+
+class ConfigError(Exception):
+    pass
+
+
+def glob_to_regex(pattern):
+    """A path glob as a regex: `**/` is zero or more directories, `**` at
+    the end anything below, `*` and `?` stay within one path segment."""
+    out = []
+    i = 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out.append("(?:[^/]+/)*")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    return re.compile("^" + "".join(out) + "$")
+
+
+def matches_any(path, patterns):
+    return any(glob_to_regex(p).match(path) for p in patterns)
+
+
+def check_regex(key, v):
+    """An allowed_notes entry must read alike in Python's re (the local gate)
+    and PCRE (CI's grepl(perl = TRUE)): no POSIX bracket class, which re takes
+    as a set of its characters, and nothing re warns about (a FutureWarning,
+    such as a possible nested set, marks a pattern whose meaning may change)."""
+    if "[[:" in v:
+        raise ConfigError(
+            ".fleet-ci.yml: %s entry %r uses a POSIX bracket class ([[:...:]]), which Python's re "
+            "and PCRE read differently; write the characters out (\\s, [0-9], ...)" % (key, v)
+        )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            re.compile(v)
+    except re.error as err:
+        raise ConfigError(".fleet-ci.yml: %s entry %r is not a regular expression: %s" % (key, v, err))
+    except FutureWarning as err:
+        raise ConfigError(
+            ".fleet-ci.yml: %s entry %r: Python's re warns (%s); write it so re and PCRE read it alike"
+            % (key, v, err)
+        )
+
+
+def locale_glibc_name(l):
+    """The name glibc files locale L under: the codeset normalized as
+    _nl_normalize_codeset() does it (letters lowered, punctuation dropped, a
+    digits-only codeset prefixed with "iso"), the @modifier kept. bin/gate-run.R's
+    fleet_locale_alias() is the same mapping."""
+    m = re.match(r"^([^.@]+)[.]([^@]+)(@.*)?$", l)
+    if not m:
+        return l
+    cs = re.sub(r"[^0-9a-z]", "", m.group(2).lower())
+    if re.match(r"^[0-9]+$", cs):
+        cs = "iso" + cs
+    return "%s.%s%s" % (m.group(1), cs, m.group(3) or "")
+
+
+def check_locales(value):
+    """Two `locales` entries glibc files under one name would build one locale
+    twice, under two directories in the local gate and one in CI's archive."""
+    seen = {}
+    for l in value:
+        name = locale_glibc_name(l)
+        if name in seen:
+            raise ConfigError(
+                ".fleet-ci.yml: locales entries %r and %r are the same glibc locale (%s); keep one"
+                % (seen[name], l, name)
+            )
+        seen[name] = l
+
+
+def check_config(data):
+    """Validate a parsed .fleet-ci.yml; return it with defaults filled."""
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ConfigError(".fleet-ci.yml must be a mapping")
+    for key, value in data.items():
+        kind = CONFIG_SCHEMA.get(key)
+        if kind is None:
+            raise ConfigError(".fleet-ci.yml: unknown key '%s'" % key)
+        if kind == "int":
+            if value != 1:
+                raise ConfigError(".fleet-ci.yml: version must be 1")
+        elif kind == "bool":
+            if not isinstance(value, bool):
+                raise ConfigError(".fleet-ci.yml: %s must be true or false" % key)
+        elif kind == "variant":
+            if value not in VARIANTS:
+                raise ConfigError(".fleet-ci.yml: variant must be one of %s" % ", ".join(VARIANTS))
+        elif kind in ("strings", "regexes"):
+            if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
+                raise ConfigError(".fleet-ci.yml: %s must be a list of non-empty strings" % key)
+            for v in value if kind == "regexes" else ():
+                check_regex(key, v)
+            if key == "locales":
+                check_locales(value)
+        else:
+            first = "path" if kind == "path_why" else "reason"
+            if not isinstance(value, list):
+                raise ConfigError(".fleet-ci.yml: %s must be a list" % key)
+            for entry in value:
+                if (
+                    not isinstance(entry, dict)
+                    or set(entry) != {first, "why"}
+                    or not all(isinstance(entry[k], str) and entry[k].strip() for k in entry)
+                ):
+                    raise ConfigError(
+                        ".fleet-ci.yml: each %s entry needs exactly '%s' and 'why', both non-empty"
+                        % (key, first)
+                    )
+    out = {
+        "version": 1,
+        "variant": "fleet-r",
+        "manual": False,
+        "docs_exclude": [],
+        "docs_gates": [],
+        "host_gates": [],
+        "cheap_gates": [],
+        "locales": [],
+        "locale_assertions": [],
+        "locale_legs": [],
+        "exclude_tests": [],
+        "allowed_skips": [],
+        "pages_keep": [],
+    }
+    out.update(data)
+    for entry in out["exclude_tests"]:
+        p = entry["path"]
+        if not re.match(r"^tests/[^\0]+$", p) or ".." in p.split("/") or p.endswith("/"):
+            raise ConfigError(".fleet-ci.yml: exclude_tests path '%s' must be a file under tests/" % p)
+    return out
+
+
+def yaml_to_data(path):
+    here = os.path.dirname(os.path.realpath(__file__))
+    res = subprocess.run(
+        [os.path.join(here, "yaml2json"), path], capture_output=True, text=True, check=False
+    )
+    if res.returncode != 0:
+        raise ConfigError(res.stderr.strip() or "yaml2json failed on %s" % path)
+    return json.loads(res.stdout)
+
+
+def load_config_file(path):
+    return check_config(yaml_to_data(path))
+
+
+def load_config_text(text):
+    res = subprocess.run(
+        [os.path.join(os.path.dirname(os.path.realpath(__file__)), "yaml2json"), "-"],
+        input=text,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res.returncode != 0:
+        raise ConfigError(res.stderr.strip() or "yaml2json failed on .fleet-ci.yml")
+    return check_config(json.loads(res.stdout))
+
+
+def parse_raw(lines):
+    """`git diff --raw --no-renames -z`-less text lines: ':old new osha nsha S\\tpath'."""
+    entries = []
+    for line in lines:
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        meta, _, path = line.partition("\t")
+        fields = meta.split()
+        if len(fields) != 5 or not fields[0].startswith(":") or not path:
+            entries.append(("?", "?", "?", line))
+            continue
+        old_mode, new_mode, status = fields[0][1:], fields[1], fields[4]
+        entries.append((old_mode, new_mode, status, path))
+    return entries
+
+
+def classify_entries(entries, exclude):
+    """Return (tier, reasons)."""
+    reasons = []
+    if not entries:
+        return "full", ["empty diff"]
+    for old_mode, new_mode, status, path in entries:
+        if status not in ("A", "M"):
+            reasons.append("%s: status %s" % (path, status))
+        elif new_mode not in REGULAR_MODES or old_mode not in (
+            (ZERO_MODE,) if status == "A" else REGULAR_MODES
+        ):
+            reasons.append("%s: mode %s -> %s is not a regular file" % (path, old_mode, new_mode))
+        elif not matches_any(path, DOCS_ALLOWLIST):
+            reasons.append("%s: not on the docs allowlist" % path)
+        elif matches_any(path, exclude):
+            reasons.append("%s: excluded by .fleet-ci.yml docs_exclude" % path)
+    if reasons:
+        return "full", reasons
+    return "docs", ["%d docs path(s)" % len(entries)]
+
+
+def git(repo, *args):
+    return subprocess.run(
+        ["git", "-C", repo] + list(args), capture_output=True, text=True, check=False
+    )
+
+
+def is_commit(repo, sha):
+    return bool(sha) and not set(sha) <= {"0"} and git(repo, "cat-file", "-e", sha + "^{commit}").returncode == 0
+
+
+def classify_range(repo, base, head):
+    if not is_commit(repo, head):
+        raise ConfigError("head %r is not a commit" % head)
+    exclude = []
+    shown = git(repo, "show", "%s:.fleet-ci.yml" % head)
+    if shown.returncode == 0:
+        exclude = load_config_text(shown.stdout)["docs_exclude"]
+    if not is_commit(repo, base):
+        return "full", ["missing base %r" % base]
+    diff = git(repo, "diff", "--raw", "--no-renames", "--no-abbrev", base, head)
+    if diff.returncode != 0:
+        return "full", ["git diff failed: %s" % diff.stderr.strip()]
+    return classify_entries(parse_raw(diff.stdout.splitlines()), exclude)
+
+
+def main(argv):
+    if argv[:1] == ["--version"]:
+        print(CLASSIFIER_VERSION)
+        return 0
+    try:
+        if argv[:1] == ["--config-json"] and len(argv) == 2:
+            print(json.dumps(load_config_file(argv[1]), sort_keys=True))
+            return 0
+        if argv[:1] == ["--raw"] and len(argv) in (2, 4):
+            exclude = []
+            if len(argv) == 4:
+                if argv[2] != "--config":
+                    raise ConfigError("usage: classify --raw FILE [--config FILE]")
+                exclude = load_config_file(argv[3])["docs_exclude"]
+            if argv[1] == "-":
+                lines = sys.stdin.readlines()
+            else:
+                with open(argv[1], encoding="utf-8") as fh:
+                    lines = fh.readlines()
+            tier, reasons = classify_entries(parse_raw(lines), exclude)
+        else:
+            repo = "."
+            if argv[:1] == ["--repo"] and len(argv) >= 2:
+                repo, argv = argv[1], argv[2:]
+            if len(argv) != 2 or argv[1].startswith("-"):
+                print("usage: classify [--repo DIR] BASE HEAD", file=sys.stderr)
+                return 2
+            tier, reasons = classify_range(repo, argv[0], argv[1])
+    except (ConfigError, OSError, ValueError) as err:
+        print("classify: %s" % err, file=sys.stderr)
+        return 2
+    for r in reasons:
+        print("classify: %s" % r, file=sys.stderr)
+    print(tier)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

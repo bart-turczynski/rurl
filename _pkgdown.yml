@@ -1,5 +1,5 @@
-# Published by the `pages` job in .gitlab-ci.yml (RURL-vkltgopc), which runs
-# only on a tag or a hand-started pipeline, so the live site documents the
+# Published by fleet-ci's `pages` job (RURL-vkltgopc; .gitlab-ci.yml includes
+# the template), which runs only from a v* tag, so the live site documents the
 # last release. DESCRIPTION's URL: field names this same site, first. The
 # previous host (bart-turczynski.github.io/rurl) was built by a GitHub Actions
 # workflow that is gone; that address now redirects here.

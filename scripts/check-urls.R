@@ -1,24 +1,23 @@
 #!/usr/bin/env Rscript
 
-# scripts/check-urls.R -- the `urls` stage of the pre-push gate.
+# scripts/check-urls.R -- the URL check, a cheap gate of the fleet-ci local
+# gate (.fleet-ci.yml's cheap_gates).
 #
 #   Rscript scripts/check-urls.R              # fetch every declared URL
 #   Rscript scripts/check-urls.R --self-test  # the offline classifier test only
 #
 # Fetches every URL the package declares and fails on a dead one, which
-# nothing else in the gate does. The `verify` hook's `R CMD check --as-cran`
-# does fetch them -- `checking CRAN incoming feasibility` calls this same
-# check_url_db() -- but a dead link there is only a NOTE, and the gate fails
-# on warnings, not notes (`error_on = "warning"`). The fleet standard adds this
+# nothing else in the gate does. The gate's `R CMD check` runs with CRAN
+# incoming feasibility off, so it never calls check_url_db(); and even where
+# `R CMD check --as-cran` does (T2's t2-ascran), a dead link is only a NOTE,
+# and the checks fail on warnings, not notes. The fleet standard adds this
 # stage to every package (seor design/fleet-standard.md, "Local pre-push
-# gate"). Copied from punycoder's scripts/check-urls.R, itself ported from
-# sitemapr's `urls` stage in tools/verify.R; the three functions below are
-# sitemapr's verify_classify_urls(), verify_url_self_test() and verify_urls(),
-# unchanged apart from these comments.
+# gate"). Ported from sitemapr's `urls` stage in tools/verify.R; the three
+# functions below are its verify_classify_urls(), verify_url_self_test() and
+# verify_urls(), unchanged apart from these comments.
 #
-# It runs as its own pre-push hook (`check-urls` in .pre-commit-config.yaml)
-# ahead of `verify`, so a dead link is reported in seconds rather than after
-# the full check.
+# It runs in the gate's full tier ahead of R CMD check, so a dead link is
+# reported in seconds rather than after the full check.
 
 # Sort the rows `tools:::check_url_db()` returns into what they mean for the
 # gate: "red" (a real defect: fail) or "warn" (no answer at all: report,

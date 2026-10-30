@@ -10,14 +10,27 @@
 # full ~36-step verify gate, because the pre-push hook had no destination
 # predicate, so an archival push cost minutes AND rewrote `tests/testthat/_snaps/`
 # and byte-pinned fixtures in the working tree. A refresh that expensive is a
-# refresh you postpone. RURL-qkowfsdt removed that cost.
+# refresh you postpone. RURL-qkowfsdt removed that cost with a pre-push wrapper
+# that skipped the gate for a local-path destination.
 #
-# So this script pushes with a PLAIN `git push` -- no `--no-verify`. That is
-# deliberate. `tools/verify-on-push.sh` already recognizes a local-path
-# destination and skips the gate for it, and letting the push go through the
-# hook is what keeps that predicate exercised. `--no-verify` here would work by
-# defeating the gate rather than composing with it, and would go on "working"
-# unchanged on the day the predicate breaks.
+# That wrapper went with the old verify hook. The pre-push hook is now
+# fleet-ci's local gate (.fleet-ci/pre-push), and from fleet-ci v1.2.0 it has
+# its own destination predicate: a push URL that is local by git's rule (a
+# path, or file:/// with an empty host) is a local mirror, and the hook prints
+# "gate: skipped, <remote> is a local mirror" and exits 0 without gating
+# (fleet-ci README, "Local mirrors are not gated"). Without the skip the gate
+# would refuse what an archival push carries: every ref from before the
+# fleet-ci migration (no .fleet-ci.yml), which is every older branch `--all`
+# pushes, and a push to main that adds more than one first-parent merge. So
+# the pushes below are plain `git push`, with no --no-verify. Every mirror this
+# script picks has a directory path as its URL; an absolute path, as `backup`
+# has, is always local by that rule.
+#
+# One caveat: under pre-commit's migration mode (the gate's hook moved to
+# hooks/pre-push.legacy by a `pre-commit install` without -f) the skip ends
+# only the gate's hook, and .pre-commit-config.yaml's pre-push stage still
+# runs. A failure there blocks the refresh; fix it, or re-run
+# `.fleet-ci/pre-push --install`, rather than reaching for --no-verify.
 #
 # THE MECHANISM CHOSEN, of the three the issue allowed (post-merge/post-commit
 # hook, scheduled job, documented manual step):
@@ -40,11 +53,12 @@
 # WHAT THIS DOES NOT GUARANTEE -- stated plainly, because the issue it closes is
 # about false confidence:
 #
-#   * IT IS NOT AUTOMATIC IN A FRESH CLONE. It is installed per clone, with
-#     `pre-commit install --hook-type post-merge`, exactly like the verify gate
-#     is installed with `--hook-type pre-push`. Committing the config does not
-#     install anything. This is the same opt-in weakness `tools/local-ci.sh`
-#     names in its own header, and it is not fixable from inside a repository.
+#   * IT IS NOT AUTOMATIC IN A FRESH CLONE. It is installed per clone: a plain
+#     `pre-commit install` arms it, because `.pre-commit-config.yaml`'s
+#     `default_install_hook_types` lists post-merge, just as the gate is
+#     installed with `.fleet-ci/pre-push --install`. Committing the config
+#     does not install anything, and that is not fixable from inside a
+#     repository.
 #   * IT ONLY FIRES ON A MERGE. `git pull --rebase` runs post-rewrite, not
 #     post-merge; `git fetch` followed by `git reset --hard`, and a plain
 #     `git checkout`, run neither.
@@ -95,8 +109,8 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
 fi
 
 # Collect the mirrors first, by the same URL-is-a-local-directory predicate
-# tools/verify-on-push.sh and tools/mirror-freshness.sh use. No mirror is not an
-# error: a fresh clone has none.
+# tools/mirror-freshness.sh uses. No mirror is not an error: a fresh clone has
+# none.
 MIRRORS=()
 for name in $(git remote); do
   [ "$name" = "$UPSTREAM" ] && continue

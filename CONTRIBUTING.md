@@ -14,26 +14,39 @@ Install dependencies:
 Rscript -e 'pak::local_install_deps(dependencies = TRUE)'
 ```
 
-The verification command also needs `pre-commit`, `python3`, and the R packages
-the gate runs that `DESCRIPTION` does not list, with roxygen2 at the version
-`Config/roxygen2/version` pins:
+Verification is fleet-ci's local gate, which runs in the fleet Docker image
+(settings in `.fleet-ci.yml`), so it needs Docker, python3, Ruby and git, and
+a `docker login registry.gitlab.com`. Install the hooks once per clone, from
+the package root:
 
 ```sh
-Rscript -e 'pin <- read.dcf("DESCRIPTION", "Config/roxygen2/version")[[1]]; pak::pkg_install(c("lintr", "spelling", "rcmdcheck", "yaml", paste0("roxygen2@", pin)))'
-pre-commit install --hook-type pre-push
+pre-commit install
+.fleet-ci/pre-push --install
 ```
 
-Run verification (the pre-push chain: the hygiene hooks, the toolchain check,
-the URL check, `tools/verify.R` in the `verify` hook (the manifest gates,
-lintr, spelling, the roxygen docs-drift check, `R CMD check --as-cran` and the
-test suite under `LC_ALL=C`), then the citation and BugReports checks):
+From then on the gate runs on every push, on each pushed ref's tip, followed
+by the pre-commit pre-push hooks (the citation, BugReports, NEWS and toolchain
+checks). `pre-commit install -f` (which installs every hook type, from
+`.pre-commit-config.yaml`'s `default_install_hook_types`) and
+`pre-commit install -f --hook-type pre-push` replace that hook and drop the
+gate; re-run `.fleet-ci/pre-push --install` after either. Without `-f`,
+`pre-commit install` keeps the gate (pre-commit's migration mode). To run the
+gate by hand on `HEAD`:
 
 ```sh
-pre-commit run --hook-stage pre-push --all-files
+.fleet-ci/gate auto
 ```
+
+The gate checks the committed tree, never uncommitted edits. Its full tier
+runs the manifest gates (`tools/verify.R --gates`), docs drift, lintr,
+spelling, the NEWS heading, the URL check, the libidn2 assertion, the test
+suite under `LC_ALL=C` (`tools/check-locale-tests.R`), the tests that need the
+source tree (`tools/check-source-tests.R`) and one `R CMD check --as-cran`.
 
 The source and test layout, and durable project context, live in
-`ARCHITECTURE.md` and `design/`: the workflow and constraints in
+`ARCHITECTURE.md` and `design/`: CI and the project settings it depends on in
+[`design/ci.md`](https://gitlab.com/bart-turczynski/rurl/-/blob/main/design/ci.md),
+the workflow and constraints in
 [`design/workflow.md`](https://gitlab.com/bart-turczynski/rurl/-/blob/main/design/workflow.md),
 the validation policy in
 [`design/validation.md`](https://gitlab.com/bart-turczynski/rurl/-/blob/main/design/validation.md),

@@ -6,8 +6,9 @@
 # package has a logo, pkgdown/favicon/ is missing and the CI env var is unset.
 # build_favicons() uploads the logo to realfavicongenerator.net. GitLab sets
 # CI=true, so the `pages` job skipped the call and the live site shipped no
-# favicons; `tools/local-ci.sh` sets no CI, so its `pages` replay called the
-# API and went red whenever the API did. Committing the set fixes both. This
+# favicons; the former `tools/local-ci.sh` set no CI, so its `pages` replay
+# called the API and went red whenever the API did. Committing the set fixes
+# both. This
 # script makes that set locally instead of from the API, so regenerating it
 # after a logo change needs no third-party service either.
 #

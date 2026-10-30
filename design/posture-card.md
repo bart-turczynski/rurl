@@ -96,6 +96,7 @@ Before fixing, name the layer; three tickets were reverted for mixing them.
   ([oracle-fixtures.md](oracle-fixtures.md)); a flipped row re-pins the sha256
   in **both** `oracle-provenance.json` and the register row.
 - A `NEWS.md` bullet cites the standard as a short clause, such as "(RFC 3986 §3.2.2)".
-- `Rscript tools/verify.R` reports `0 failed`.
+- `.fleet-ci/gate auto` passes (its full tier runs the manifest gates
+  through `Rscript tools/verify.R --gates`, which reports `0 failed`).
 - No ADR, decision record or worklog unless the change flips a contract claim
   or changes a user-visible default with no governing ADR.

@@ -50,6 +50,9 @@ via `.Rbuildignore`, so it never affects `R CMD check` or the pkgdown site.
   areas.
 - [`validation.md`](validation.md) — the validation policy: the local gate,
   when to run it, and what the whitespace fixers must skip.
+- [`ci.md`](ci.md) — the verification tiers (the local gate, T2, T3), the
+  project settings CI depends on, and the gaps the fleet-ci migration
+  accepted.
 - [`standards-literal-audit-2026-10-28.md`](standards-literal-audit-2026-10-28.md)
   — a dated snapshot: the ADR 0020 audit of ADRs, rulings, tests and dials
   against the standards' text (RURL-ongkcidw), one ticket per finding.

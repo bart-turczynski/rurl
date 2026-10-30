@@ -62,7 +62,6 @@
 ^tools/diagnostics-doc-consistency\.R$
 ^tools/deferral-gate\.R$
 ^tools/curl-zero-gate\.R$
-^tools/pin-pages-md-filter\.R$
 ^tools/build-favicons\.sh$
 # The citation gate ported from seor (design/adr/0002 there). Not part
 # of the installable package; without this, --as-cran reports it as a
@@ -74,3 +73,14 @@
 # 2909433500, SEOR-nxycpzlk. punycoder carries the same entry. Keep these
 # lines free of unbalanced brackets: R 4.1 reads comment lines as patterns.
 ^\.Rlibs$
+# The same for fleet-ci's t2-sanitizers job, which installs the dependencies
+# into $CI_PROJECT_DIR/.fleet-lib and then runs `R CMD build .` there.
+^\.fleet-lib$
+# The fleet-ci local gate: the vendored runner and its settings, per
+# fleet-ci's README, "Adopting the template", and the two test cheap gates
+# it runs. Every line here is a regular expression, comments included: no
+# unbalanced brackets.
+^\.fleet-ci$
+^\.fleet-ci\.yml$
+^tools/check-locale-tests\.R$
+^tools/check-source-tests\.R$
