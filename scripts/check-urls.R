@@ -20,8 +20,9 @@
 # reported in seconds rather than after the full check.
 
 # Sort the rows `tools:::check_url_db()` returns into what they mean for the
-# gate: "red" (a real defect: fail) or "warn" (no answer at all: report,
-# pass). Pure and offline, so
+# gate: "red" (a real defect: fail), "warn" (no answer at all: report,
+# pass) or "limited" (gitlab.com refused to answer this machine for now:
+# report loudly, pass). Pure and offline, so
 # verify_url_self_test() can pin it with a constructed data frame.
 #
 # check_url_db() returns only the URLs it objects to, one row each. Its
@@ -34,8 +35,12 @@
 # Those are defects in the text the package declares, and R CMD check reports
 # them the same way it reports a 404.
 #
-# So only "Error" rows with no static complaint are downgraded to a warning: a
-# transient network blip must never reject a push. Everything else
+# So only "Error" rows with no static complaint are downgraded to a
+# warning: a transient network blip must never reject a push. Nor must
+# gitlab.com's rate limit: it answers 429 per IP, shared by every session
+# on the machine, for half an hour at a time, whatever the URL
+# (SEOR-bgvkdxyw). Its 429s with no static complaint are "limited"; a 429
+# from any other host stays red, as 403 does. Everything else
 # check_url_db() returns is red. That includes 403,
 # which R CMD check's incoming step drops by default
 # (`_R_CHECK_URLS_TAKE_403_STATUS_AS_OK_`) because bot-shy hosts answer it;
@@ -72,6 +77,8 @@ verify_classify_urls <- function(bad) {
 
   kind <- rep("red", n)
   kind[bad$Status == "Error" & !static] <- "warn"
+  gitlab <- grepl("^https?://gitlab\\.com([/:?#]|$)", bad$URL)
+  kind[bad$Status == "429" & gitlab & !static] <- "limited"
   kind
 }
 
@@ -101,6 +108,17 @@ verify_url_self_test <- function() {
     list(row("https://x.example/", "500", "Server Error"), "red"),
     list(row("https://nonexistent.invalid/", "Error", "error 6"), "warn"),
     list(row("https://10.255.255.1/", "Error", "error 28"), "warn"),
+    list(row(wi, "429", "Too Many Requests"), "limited"),
+    list(row("https://x.example/", "429", "Too Many Requests"), "red"),
+    list(row("https://gitlab.com.x.example/", "429", ""), "red"),
+    list(
+      rbind(row(wi, "429"), row("https://x.example/", "404")),
+      c("limited", "red")
+    ),
+    list(
+      row(wi, "429", "Too Many Requests", new = "https://x.example/"),
+      "red"
+    ),
     list(
       row("https://x.example/a", "200", new = "https://x.example/b"),
       "red"
@@ -210,6 +228,13 @@ verify_urls <- function(dir = ".") {
   show(
     "warn",
     "  WARNING, not reached (no HTTP status; network, not the URL):"
+  )
+  show(
+    "limited",
+    paste0(
+      "  WARNING, NOT VERIFIED: gitlab.com rate-limited this machine ",
+      "(429); push again once it clears to check these:"
+    )
   )
   show("red", "  BROKEN:")
 
