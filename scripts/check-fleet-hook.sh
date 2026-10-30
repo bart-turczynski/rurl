@@ -17,6 +17,18 @@
 # SEOR-cjxarlcq); it fails since (SEOR-gksaxuoz).
 set -u
 
+# A push to a local URL (a package's archival `backup` mirror) is not gated:
+# fleet-ci's hook lets it through, so this does too. Same rule as fleet-ci's
+# is_local_mirror(): file:/// with an empty host, or a path with no `:`
+# before its first `/`. pre-commit sets PRE_COMMIT_REMOTE_URL at pre-push.
+url=${PRE_COMMIT_REMOTE_URL:-}
+case $url in
+  "") ;;
+  file:///*) exit 0 ;;
+  *://*) ;;
+  *) case ${url%%/*} in *:*) ;; *) exit 0 ;; esac ;;
+esac
+
 top=$(git rev-parse --show-toplevel 2>/dev/null) || top="."
 vendored="$top/.fleet-ci/pre-push"
 
@@ -36,7 +48,7 @@ fi
 hooks=$(git rev-parse --git-path hooks 2>/dev/null) || hooks=""
 if [ -n "$hooks" ]; then
   for f in "$hooks/pre-push" "$hooks/pre-push.legacy"; do
-    if [ -f "$f" ] && grep -qF -- "$marker" "$f"; then
+    if [ -f "$f" ] && [ -x "$f" ] && grep -qF -- "$marker" "$f"; then
       exit 0
     fi
   done
