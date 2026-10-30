@@ -71,7 +71,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # bin/classify is loaded as a module below; write no __pycache__ next to it
 # (in a package, that would be an untracked file in .fleet-ci/).
 sys.dont_write_bytecode = True
-GATE_VERSION = "3"
+GATE_VERSION = "4"
 FLEET_PROJECT = "bart-turczynski/fleet-ci"
 VARIANT_VARS = {"fleet-r": "FLEET_IMAGE_R_RELEASE", "fleet-r-idn2": "FLEET_IMAGE_IDN2_RELEASE"}
 SCRUB_EXACT = ("R_PROFILE_USER", "R_ENVIRON_USER")
