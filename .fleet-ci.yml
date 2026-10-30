@@ -36,7 +36,9 @@ docs_gates:
 #   from tools/verify-manifest.yml; the export has no git history, so it runs
 #   every self-test);
 # - man/, NAMESPACE and DESCRIPTION against a fresh roxygen2 run
-#   (SEOR-nwfmerhu); lintr; the NEWS heading against the version;
+#   (SEOR-nwfmerhu); lintr; README.md against a fresh knit of README.Rmd
+#   (SEOR-qaulrrja: the manifest's `readme` job is a record, not a gate);
+#   the NEWS heading against the version;
 # - every declared URL (the gate's R CMD check runs with remote incoming, and
 #   so its URL check, off);
 # - the whole suite (bar the two audits) under LC_ALL=C, through
@@ -55,6 +57,7 @@ cheap_gates:
   - Rscript tools/verify.R --gates
   - Rscript scripts/check-docs-drift.R .
   - Rscript -e 'lints <- lintr::lint_package(); if (length(lints)) { print(lints); quit(status = 1) }'
+  - sh scripts/check-readme-drift.sh
   - sh scripts/check-news-version.sh
   - Rscript scripts/check-urls.R
   - LC_ALL=C LANG=C Rscript tools/check-locale-tests.R
