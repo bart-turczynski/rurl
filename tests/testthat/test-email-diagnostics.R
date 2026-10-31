@@ -384,6 +384,9 @@ test_that("extraction never disturbs the mailto clean_url / round-trip", {
     },
     add = TRUE
   )
+  if (!identical(stringi::stri_trans_tolower("WIKI"), "wıkı")) {
+    testthat::skip("stringi's ICU has no Turkish case tailoring here")
+  }
   rurl_clear_caches()
   force(code)
 }

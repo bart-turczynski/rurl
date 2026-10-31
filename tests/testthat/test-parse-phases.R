@@ -373,6 +373,9 @@ test_that(".assemble_parse_result coerces port to integer", {
     },
     add = TRUE
   )
+  if (!identical(stringi::stri_trans_tolower("WIKI"), "wıkı")) {
+    testthat::skip("stringi's ICU has no Turkish case tailoring here")
+  }
   rurl_clear_caches()
   force(code)
 }
