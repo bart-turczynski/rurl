@@ -67,12 +67,13 @@ distinction has to be established before the measurement, never after it.
   tree fine — and add the identity guards in the same pass. The sweep's own
   header states which columns exist for which change and why.
 - **Decode surfaces.** A raw-byte sweep cannot falsify a claim about decode
-  surfaces. A `%0D%0A` input returns through `get_query()` (`decode = TRUE` is
-  the default), through `get_query(format = "list")` and
-  `query_param_summary()$example_value`, and through anything carrying
-  `path_encoding = "decode"` — including `get_clean_url()`, which then yields a
-  whole URL string with an embedded CRLF. The identity-preserving accessors are
-  all clean, which is exactly what makes a raw-byte sweep look conclusive. When
+  surfaces. A `%0D%0A` input still returns decoded through
+  `get_query(format = "list")` and `query_param_summary()$example_value`. It
+  stays encoded through the `get_query()` string form (`decode = TRUE` is the
+  default; the readable rule, RURL-utkkuuaz) and through the `path_encoding`
+  `"decode"` argument, where `get_clean_url()` keeps it as written
+  (RURL-eokizmdi). The identity-preserving accessors are all clean, which is
+  exactly what makes a raw-byte sweep look conclusive. When
   asking whether component X can hold byte B, vary the **spelling** of B *and*
   enumerate every accessor **argument** that decodes.
 - **Consumer argument sets.** When re-deriving a recorded fixture cell, use the
