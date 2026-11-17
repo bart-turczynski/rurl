@@ -11,7 +11,7 @@
 - `get_host()` and `get_path()` error on a `case_handling` value that would change the returned component, under both standards.
 - `profile = "rfc-syntax"` paths keep a percent-triplet's hex case (`/%7e` stays `/%7e`), so `get_clean_url()` no longer equates `%2f` and `%2F` there.
 - An explicit `url_standard = NULL` beside a `profile` overrides the bundle's standard as `"whatwg"` does.
-- `profile = "rfc-syntax"` with `url_standard = "whatwg"` or `NULL` now resolves dot segments: `/a/../b` is `/b` (WHATWG URL, path state) (`RURL-wvqchweq`).
+- `profile = "rfc-syntax"` with `url_standard = "whatwg"` or `NULL` resolves dot segments (`/a/../b` is `/b`), and `url_profile()` no longer lists its case and path exceptions there (WHATWG URL, path state) (`RURL-wvqchweq`).
 - Under `"rfc3986"`, `path_encoding = "encode"` only adds escapes: `%2F`, empty segments and `pchar` sub-delimiters survive (RFC 3986 §3.3) (`RURL-dbyavcjt`).
 - `path_encoding = "decode"` decodes only unreserved and non-ASCII UTF-8 triplets; reserved ones such as `%2F` and `%3F` stay encoded (RFC 3986 §2.2) (`RURL-eokizmdi`).
 - Under `"rfc3986"`, `host_encoding = "idna"` and `"unicode"` keep a host whose triplets cannot safely decode (reserved, `%25`, control, invalid UTF-8) as written: `a%2Fb` no longer becomes `a/b` (RFC 3986 §2.2) (`RURL-rhwcrezl`).

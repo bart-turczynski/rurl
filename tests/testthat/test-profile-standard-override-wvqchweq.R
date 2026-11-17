@@ -85,6 +85,15 @@ test_that("url_profile() prints no governed knobs under override", {
     expect_null(res$path_identity)
     expect_true(res$customized)
   }
+  # A governed knob the caller passes by name is kept; the others still drop.
+  # (Values WHATWG would refuse beside an override: RURL-ghdkisxb.)
+  named <- url_profile(
+    "rfc-syntax",
+    url_standard = "whatwg", path_normalization = "dot_segments"
+  )
+  expect_identical(named$path_normalization, "dot_segments")
+  expect_null(named$case_handling)
+  expect_null(named$path_identity)
 })
 
 test_that("controls: the bundle's own standard keeps the exceptions", {

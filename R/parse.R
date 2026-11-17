@@ -359,7 +359,9 @@
 #'   Chrome-faithful); `"whatwg"` is the absolute-URL no-base posture that
 #'   *rejects* scheme-less input (unlike a bare `url_standard = "whatwg"`);
 #'   `"rfc-syntax"` is RFC 3986 generic syntax as parsing, not normalization
-#'   (case and dot-segments are preserved); `"seo"`/`"canonical"` is rurl's
+#'   (case and dot-segments are preserved; an explicit `url_standard` other
+#'   than its own `"rfc3986"` drops these case and path exceptions);
+#'   `"seo"`/`"canonical"` is rurl's
 #'   origin-cleaning intent — a **lossy policy projection of a WHATWG-parsed
 #'   URL** (ADR 0017), which claims no resource equivalence:
 #'   `url_standard = "whatwg"` underneath (which also resolves `.`/`..` folder
@@ -1388,7 +1390,7 @@ safe_parse_urls <- function(url,
   if (!is.null(bundle$url_standard) && !is.null(supplied$url_standard) &&
         !identical(supplied$url_standard, bundle$url_standard)) {
     governed <- setdiff(
-      c("path_normalization", "case_handling", "path_identity"),
+      names(.URL_STANDARD_PROFILES[[bundle$url_standard]]),
       names(supplied)
     )
     bundle <- bundle[setdiff(names(bundle), governed)]
