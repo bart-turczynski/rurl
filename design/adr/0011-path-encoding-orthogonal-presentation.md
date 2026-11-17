@@ -137,3 +137,4 @@ stands.
 triplet for an unreserved octet (RFC 3986 §6.2.2.2) and a run of triplets that
 forms well-formed non-ASCII UTF-8. Every other ASCII triplet, `%2F`, `%25` and
 the rest of the reserved set included, stays as written (§2.2).
+`get_query(decode = TRUE)` follows the same rule since RURL-utkkuuaz.

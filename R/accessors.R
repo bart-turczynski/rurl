@@ -766,33 +766,40 @@ get_path <- function(
 #'
 #' The underlying parse preserves the raw query string byte-for-byte (a bare
 #' key such as `?flag` stays `flag`, not `flag=`). By default this accessor
-#' still percent-decodes for readability (`decode = TRUE`); pass
-#' `decode = FALSE` to obtain the raw query exactly as written in the URL.
+#' still percent-decodes for readability (`decode = TRUE`), but only the
+#' triplets that name an unreserved character or well-formed UTF-8: a reserved
+#' triplet such as `%26` (`&`), `%3D` (`=`) or `%23` (`#`) stays encoded,
+#' because decoding it would turn data into a delimiter (RFC 3986 section 2.2;
+#' under the WHATWG URL Standard the query is a percent-encoded string in which
+#' `&` separates pairs). Pass `decode = FALSE` to obtain the raw query exactly
+#' as written in the URL.
 #'
 #' Under `url_standard = "whatwg"` the underlying query carries the standard's
 #' percent-encoded spelling (the query percent-encode set is applied, so a
 #' literal space becomes `%20`); under `url_standard = "rfc3986"` or no
-#' selector it is the raw source spelling. That distinction is only visible
-#' with `decode = FALSE`, since decoding collapses both spellings.
+#' selector it is the raw source spelling. That distinction shows with
+#' `decode = FALSE`, and under `decode = TRUE` wherever a triplet stays encoded
+#' (`%22` against a literal `"`).
 #'
 #' @section Security note:
 #' Because `decode = TRUE` is the **default**, this accessor can return
-#' characters the URL itself never contained literally — including control
-#' characters such as CR and LF, which `%0D`/`%0A` decode to. Treat the result
-#' as untrusted input: do not interpolate it into a header, a log line, a
-#' shell command, or a SQL statement without escaping it for that sink, and do
-#' not assume it is single-line. Pass `decode = FALSE` when you want the query
+#' non-ASCII characters that the URL held only as percent-encoded UTF-8. It
+#' never decodes a reserved triplet, so `&`, `=`, `#`, `%0D`, `%0A` and `%00`
+#' stay encoded. Treat the result as untrusted input: do not interpolate it
+#' into a header, a log line, a shell command, or a SQL statement without
+#' escaping it for that sink. Pass `decode = FALSE` when you want the query
 #' exactly as written, with no decoding step at all.
 #'
 #' @param url A character vector of URLs.
 #' @inheritParams safe_parse_url
 #' @param format Return format: "string" (default) or "list" for parsed
 #' elements.
-#' @param decode Logical; if TRUE (default), percent-decodes the query
-#' (the whole string for format="string", keys/values for format="list").
-#' Set FALSE to obtain the query as written: the raw query for the default
-#' `query_handling = "keep"`, or the canonical re-encoded form (uppercase hex,
-#' `%20`, `%26`/`%3D`) once any filtering is requested.
+#' @param decode Logical; if TRUE (default), decodes the query's unreserved and
+#' well-formed UTF-8 triplets (the whole string for format="string",
+#' keys/values for format="list"); a reserved triplet such as `%26` stays
+#' encoded. Set FALSE to obtain the query as written: the raw query for the
+#' default `query_handling = "keep"`, or the canonical re-encoded form
+#' (uppercase hex, `%20`, `%26`/`%3D`) once any filtering is requested.
 #' @details
 #' The filtering arguments (`query_handling`, `params_keep`, `params_drop`,
 #' `params_case_sensitive`, `sort_params`, `empty_param_handling`,
@@ -800,7 +807,8 @@ get_path <- function(
 #' default to `query_handling = "keep"` here: an accessor returns the query as
 #' found unless you ask it to filter. When no filtering or reordering is
 #' requested (the default profile), the output is byte-for-byte identical to
-#' earlier releases; once you opt in, the surviving params are selected first
+#' earlier releases except that a reserved triplet stays encoded (RFC 3986
+#' section 2.2); once you opt in, the surviving params are selected first
 #' and only then rendered per `format`/`decode`.
 #' @return A character vector (format="string") or list (format="list").
 #' @export
@@ -895,6 +903,8 @@ get_query <- function(url,
   lapply(raw, ._parse_query_string, decode = decode)
 }
 
+# The default decode: the RURL-eokizmdi rule (.path_decode_readable_one()), so
+# a reserved triplet such as %26 stays encoded instead of becoming a delimiter.
 .decode_raw_query_strings <- function(raw) {
   vapply(
     raw,
@@ -902,7 +912,7 @@ get_query <- function(url,
       if (is.na(q)) {
         NA_character_
       } else {
-        tryCatch(.pct_unescape(q), error = function(e) q)
+        tryCatch(.path_decode_readable_one(q), error = function(e) q)
       }
     },
     character(1),
@@ -986,7 +996,27 @@ get_query <- function(url,
   if (is.null(sp)) {
     return("")
   }
-  paste(paste0(sp$dec_key, "=", sp$dec_value), collapse = "&")
+  key <- .query_readable_tokens(sp$raw_key, sp$key_opaque, FALSE, decode_plus)
+  val <- .query_readable_tokens(sp$raw_value, sp$val_opaque, TRUE, decode_plus)
+  paste(paste0(key, "=", val), collapse = "&")
+}
+
+# The decode = TRUE rendering of one surviving token, from its raw spelling (the
+# matcher still sees the full decode). An opaque token is emitted as written, as
+# the matcher saw it. A live token decodes by the RURL-eokizmdi rule, after
+# decode_plus turns a value's `+` into a space, so a reserved triplet stays
+# encoded.
+.query_readable_tokens <- function(tokens, opaque, is_value, decode_plus) {
+  vapply(seq_along(tokens), function(i) {
+    if (opaque[i]) {
+      return(tokens[i])
+    }
+    x <- tokens[i]
+    if (is_value && decode_plus) {
+      x <- .bytes_replace(x, "+", " ", all = TRUE, fixed = TRUE)
+    }
+    tryCatch(.path_decode_readable_one(x), error = function(e) x)
+  }, character(1), USE.NAMES = FALSE)
 }
 
 .get_query_engine_list <- function(raw, decode, query_handling, params_keep,

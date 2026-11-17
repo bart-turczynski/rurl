@@ -1303,7 +1303,8 @@ test_that("get_password() reaches the WHATWG userinfo spelling", {
 
 test_that("get_query() reaches the WHATWG query spelling", {
   u <- "http://example.com/p?a=b\"c"
-  # Only visible undecoded: decoding collapses both spellings.
+  # Shown undecoded here; under decode = TRUE a triplet such as %22 stays
+  # encoded too (RURL-utkkuuaz), so the spellings can show there as well.
   expect_identical(
     get_query(u, decode = FALSE, url_standard = "whatwg"), "a=b%22c"
   )
