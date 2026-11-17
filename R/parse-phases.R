@@ -2973,6 +2973,10 @@
   }
 
   subset <- final_host[elig]
+  if (.is_whatwg(url_standard)) {
+    host_for_clean[elig] <- .whatwg_host_presentation_vec(subset, host_encoding)
+    return(host_for_clean)
+  }
   # Under `rfc3986` the host IDENTITY preserves its source spelling: section
   # 6.2.2.2 lets only unreserved triplets decode, so `a%C2%ADb` stays written
   # that way (`host_pct = "keep"`, R/parse-web.R). IDNA and Unicode are
@@ -2985,25 +2989,60 @@
   # a triplet standing; `whatwg` has already decoded the host once, and
   # decoding again would strip a LEVEL of encoding (`a%2560b` -> `a%60b` ->
   # "a`b") rather than reveal one.
+  #
+  # The decode reveals only what names the same host (RURL-rhwcrezl): see
+  # `.rfc_host_decode_for_presentation()`. A host that still holds a triplet
+  # after it (a reserved, `%25` or control octet, or a run that is not UTF-8)
+  # has no other spelling, so it keeps its source spelling, as "keep" gives;
+  # so does a host whose IDNA encode fails.
+  src <- subset
+  held <- rep(FALSE, length(subset))
   if (identical(url_standard, "rfc3986")) {
-    subset <- vapply(subset, .whatwg_percent_decode_host, character(1),
-      USE.NAMES = FALSE
-    )
+    subset <- .rfc_host_decode_for_presentation(subset)
+    held <- is.na(subset)
+    subset[held] <- src[held]
   }
-  if (.is_whatwg(url_standard)) {
-    host_for_clean[elig] <- .whatwg_host_presentation_vec(subset, host_encoding)
-  } else if (host_encoding == "idna") {
-    encoded <- .normalize_and_punycode_vec(subset)
+  todo <- !held
+  if (!any(todo)) {
+    host_for_clean[elig] <- src
+    return(host_for_clean)
+  }
+  if (host_encoding == "idna") {
+    encoded <- .normalize_and_punycode_vec(subset[todo])
     keep_orig <- is.na(encoded)
-    encoded[keep_orig] <- subset[keep_orig]
-    host_for_clean[elig] <- encoded
+    encoded[keep_orig] <- src[todo][keep_orig]
+    subset[todo] <- encoded
   } else {
-    decoded <- .punycode_to_unicode_vec(subset)
+    decoded <- .punycode_to_unicode_vec(subset[todo])
     keep_orig <- is.na(decoded) | decoded == ""
-    decoded[keep_orig] <- subset[keep_orig]
-    host_for_clean[elig] <- decoded
+    decoded[keep_orig] <- subset[todo][keep_orig]
+    subset[todo] <- decoded
   }
+  host_for_clean[elig] <- subset
   host_for_clean
+}
+
+# The `rfc3986` host decode ahead of the IDNA / Unicode presentation
+# (RURL-rhwcrezl). A reserved character and its triplet name different URIs
+# (RFC 3986 section 2.2) and only an unreserved triplet may decode (section
+# 6.2.2.2), so this decodes exactly what `path_encoding = "decode"` does
+# (`.path_decode_readable_one()`, RURL-eokizmdi): unreserved triplets and runs
+# of well-formed non-ASCII UTF-8. Every other triplet stays as written, and a
+# host that still holds one comes back NA, for the caller to keep its source
+# spelling. It used to decode every triplet with `utils::URLdecode()`, so
+# `a%2Fb` presented as `a/b` (host `a`, path `/b/` on re-parse), `%25` as a
+# lone `%` and `hello%00` as `hello`.
+.rfc_host_decode_for_presentation <- function(host) {
+  pct <- !is.na(host) & grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)
+  if (!any(pct)) {
+    return(host)
+  }
+  dec <- vapply(host[pct], .path_decode_readable_one, character(1),
+    USE.NAMES = FALSE
+  )
+  dec[grepl("%[0-9A-Fa-f]{2}", dec, perl = TRUE)] <- NA_character_
+  host[pct] <- dec
+  host
 }
 
 # WHATWG host presentation (RUL-002, RUL-034). The WHATWG host parser runs
