@@ -920,19 +920,6 @@
 # in `.apply_host_standard_model_vec()`, which is where "a host that ends in a
 # number must parse as an address" belongs.
 
-# Decode percent-triplets in a WHATWG host just far enough for the host model to
-# see the real code points after the parse has resolved the URL's structure. A
-# malformed or NUL-containing sequence maps to a C0 sentinel so the WHATWG
-# forbidden-host gate rejects the row; no successful output depends on that
-# placeholder.
-.whatwg_percent_decode_host <- function(host) {
-  if (is.na(host) || !nzchar(host) ||
-      !grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)) {
-    return(host)
-  }
-  tryCatch(utils::URLdecode(host), error = function(e) "\u0001")
-}
-
 # Uppercase the hex digits of every percent-triplet, leaving all other
 # characters alone (RFC 3986 section 6.2.2.1). Unlike
 # `.rfc_unreserved_normalize` this does NOT decode unreserved triplets -- it is
@@ -3029,9 +3016,11 @@
 # (`.path_decode_readable_one()`, RURL-eokizmdi): unreserved triplets and runs
 # of well-formed non-ASCII UTF-8. Every other triplet stays as written, and a
 # host that still holds one comes back NA, for the caller to keep its source
-# spelling. It used to decode every triplet with `utils::URLdecode()`, so
-# `a%2Fb` presented as `a/b` (host `a`, path `/b/` on re-parse), `%25` as a
-# lone `%` and `hello%00` as `hello`.
+# spelling. So does a host whose decode gives a label with the ACE prefix and
+# a non-ASCII code point (`xn--zz%C3%BC`): that is no A-label, and IDNA would
+# prefix it a second time (`xn--xn--zz-8ya`). It used to decode every
+# triplet with `utils::URLdecode()`, so `a%2Fb` presented as `a/b` (host `a`,
+# path `/b/` on re-parse), `%25` as a lone `%` and `hello%00` as `hello`.
 .rfc_host_decode_for_presentation <- function(host) {
   pct <- !is.na(host) & grepl("%[0-9A-Fa-f]{2}", host, perl = TRUE)
   if (!any(pct)) {
@@ -3040,7 +3029,9 @@
   dec <- vapply(host[pct], .path_decode_readable_one, character(1),
     USE.NAMES = FALSE
   )
-  dec[grepl("%[0-9A-Fa-f]{2}", dec, perl = TRUE)] <- NA_character_
+  held <- grepl("%[0-9A-Fa-f]{2}", dec, perl = TRUE) |
+    grepl("(?:^|\\.)[Xx][Nn]--[^.]*[^\\x00-\\x7F]", dec, perl = TRUE)
+  dec[held] <- NA_character_
   host[pct] <- dec
   host
 }
