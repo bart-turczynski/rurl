@@ -118,6 +118,41 @@ test_that("whatwg: UTS #46 maps both marks to nothing, already right", {
   }
 })
 
+# RURL-giexrukh (folded into RURL-ofortppo, RUL-034): UTS #46 mapping (section
+# 4, step 1) removes U+FEFF and U+200B, so the WHATWG host parser's domain to
+# ASCII gives the A-label whether a mark leads it or not, and "keep" returns
+# that parsed host. The mark used to hide the `xn--` prefix from the A-label
+# test, which ran on the unmapped host, so the mark-led host rendered as a
+# U-label.
+test_that("whatwg keep: a mark-led A-label host is the BOM-less host", {
+  plain <- safe_parse_url("http://xn--nxasmq6b.com/",
+                          url_standard = "whatwg")$host
+  expect_identical(plain, "xn--nxasmq6b.com")
+  hosts <- c(
+    paste0(bom, "xn--nxasmq6b.com"),
+    paste0(zwsp, "xn--nxasmq6b.com"),
+    paste0(bom, bom, "xn--nxasmq6b.com")
+  )
+  for (h in hosts) {
+    u <- paste0("http://", h, "/")
+    expect_identical(safe_parse_url(u, url_standard = "whatwg")$host, plain,
+                     label = paste(utf8ToInt(h)[1L], "keep"))
+    expect_identical(safe_parse_url(u)$host, plain)
+    expect_identical(safe_parse_url(u)$domain, plain)
+  }
+  # A mark before a later label maps away the same way.
+  expect_identical(
+    safe_parse_url(paste0("http://a.", bom, "xn--nxasmq6b.com/"))$host,
+    "a.xn--nxasmq6b.com"
+  )
+  # "unicode" still renders the U-label.
+  expect_identical(
+    safe_parse_url(paste0("http://", bom, "xn--nxasmq6b.com/"),
+                   host_encoding = "unicode")$host,
+    paste0(beta, ".com")
+  )
+})
+
 test_that("signature: the other encodings and the PSL columns do not move", {
   # Only `host_encoding = "unicode"` renders through the split. "keep"
   # returns the host as parsed, and "idna" encodes the whole label, mark and
