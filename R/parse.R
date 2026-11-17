@@ -1259,6 +1259,8 @@ safe_parse_urls <- function(url,
   # normalization exceptions (ADR 0012 lines 518-519), not conflicts with
   # ADR 0007 -- they bypass the direct-user conflict matrix on the profile path
   # only and win over the url_standard profile expansion in .parse_options().
+  # They hold under rfc3986 only: .resolve_profile() drops them when the
+  # caller overrides `url_standard` (RURL-wvqchweq).
   `rfc-syntax` = list(
     url_standard = "rfc3986",
     scheme_acceptance = "general",
@@ -1378,6 +1380,19 @@ safe_parse_urls <- function(url,
   }
   bundle <- .URL_PROFILES[[name]]
   supplied <- supplied[!vapply(supplied, is.null, logical(1))]
+  # The bundle's governed knobs are exceptions authorized for the bundle's
+  # OWN standard (ADR 0012 D6). Under a caller's different `url_standard`
+  # they would rewrite that standard's record (`rfc-syntax` + "whatwg" kept
+  # `/a/../b`, RURL-wvqchweq), so drop the ones the caller did not supply.
+  # A same-standard override keeps them.
+  if (!is.null(bundle$url_standard) && !is.null(supplied$url_standard) &&
+        !identical(supplied$url_standard, bundle$url_standard)) {
+    governed <- setdiff(
+      c("path_normalization", "case_handling", "path_identity"),
+      names(supplied)
+    )
+    bundle <- bundle[setdiff(names(bundle), governed)]
+  }
   overrides <- supplied[intersect(names(supplied), names(bundle))]
   for (knob in names(overrides)) {
     bundle[[knob]] <- overrides[[knob]]
@@ -1793,10 +1808,11 @@ safe_parse_urls <- function(url,
   # Profile-authorized normalization exceptions (ADR 0012 D6, lines 518-519):
   # a named profile (e.g. `rfc-syntax`) may authorize keeping the path verbatim
   # even under a url_standard that would normally govern it. These win over the
-  # expansion above. Only the profile path passes this argument, so the
-  # direct-user conflict matrix (ADR 0007) is untouched for scheme-selector
-  # calls -- the localization is that `profile_authorized` is NULL unless a
-  # named profile set it.
+  # expansion above, under the bundle's own standard only (.resolve_profile()
+  # drops them under a different one). Only the profile path passes this
+  # argument, so the direct-user conflict matrix (ADR 0007) is untouched for
+  # scheme-selector calls -- the localization is that `profile_authorized` is
+  # NULL unless a named profile set it.
   if (!is.null(profile_authorized)) {
     for (knob in names(profile_authorized)) {
       opts[[knob]] <- profile_authorized[[knob]]

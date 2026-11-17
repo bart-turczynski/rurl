@@ -1,10 +1,12 @@
 # RURL-wvqchweq: a `url_standard` passed beside a `profile` that differs from
 # the bundle's own standard. `profile = "rfc-syntax"` bundles rfc3986 with the
 # authorized exceptions `path_normalization = "none"`, `case_handling = "keep"`
-# and `path_identity = "none"` (ADR 0012 D6). PINNED HERE AS FOUND: under an
-# override to "whatwg" (or NULL, which means "whatwg", ADR 0020 D4) those
-# exceptions still win over the WHATWG expansion, so the record keeps
-# `/a/../b`, a path neither standard gives.
+# and `path_identity = "none"` (ADR 0012 D6). They hold for rfc3986 only:
+# under an override to "whatwg" (or NULL, which means "whatwg", ADR 0020 D4)
+# the record is the WHATWG one, whose path state resolves dot segments
+# (WHATWG URL, path state), and equals the direct "whatwg" call with the
+# bundle's remaining knobs. It used to keep `/a/../b`, a path neither
+# standard gives.
 
 wvq_inputs <- c(
   "http://EX.com/a/../b",
@@ -24,7 +26,7 @@ wvq_direct_whatwg <- function(x) {
   )
 }
 
-test_that("an overridden rfc-syntax keeps the bundle's path exceptions", {
+test_that("an overridden rfc-syntax gives the WHATWG record", {
   for (std in list("whatwg", NULL)) {
     res <- safe_parse_urls(
       wvq_inputs,
@@ -32,8 +34,9 @@ test_that("an overridden rfc-syntax keeps the bundle's path exceptions", {
     )
     expect_identical(
       res$path,
-      c("/a/../b", "/a/%2e%2e/b", "/a/./b", "/a/../b", "/%7e/x", NA, NA)
+      c("/b", "/b", "/a/b", "/b", "/%7e/x", NA, NA)
     )
+    # RUL-034: under "whatwg" the host is the ASCII one.
     expect_identical(
       res$host,
       c("ex.com", "ex.com", "ex.com", "xn--bcher-kva.de", "ex.com", NA, NA)
@@ -41,11 +44,12 @@ test_that("an overridden rfc-syntax keeps the bundle's path exceptions", {
     expect_identical(
       res$clean_url,
       c(
-        "http://ex.com/a/../b", "http://ex.com/a/%2e%2e/b",
-        "http://ex.com/a/./b", "http://xn--bcher-kva.de/a/../b",
-        "http://ex.com/%7e/x", NA, NA
+        "http://ex.com/b", "http://ex.com/b", "http://ex.com/a/b",
+        "http://xn--bcher-kva.de/b", "http://ex.com/%7e/x", NA, NA
       )
     )
+    # Every column equals the direct call with the bundle's other knobs.
+    expect_identical(res, wvq_direct_whatwg(wvq_inputs))
   }
 })
 
@@ -54,24 +58,33 @@ test_that("the scalar wrapper and get_clean_url() agree with the vector", {
     "http://EX.com/a/../b",
     profile = "rfc-syntax", url_standard = "whatwg"
   )
-  expect_identical(one$path, "/a/../b")
-  expect_identical(one$clean_url, "http://ex.com/a/../b")
+  expect_identical(one$path, "/b")
+  expect_identical(one$clean_url, "http://ex.com/b")
   expect_identical(
     get_clean_url(
       "http://EX.com/a/../b",
       profile = "rfc-syntax", url_standard = "whatwg"
     ),
-    "http://ex.com/a/../b"
+    "http://ex.com/b"
+  )
+  expect_identical(
+    get_clean_url(
+      "http://EX.com/a/../b",
+      profile = "rfc-syntax", url_standard = NULL
+    ),
+    "http://ex.com/b"
   )
 })
 
-test_that("url_profile() prints the bundle's governed knobs under override", {
-  res <- url_profile("rfc-syntax", url_standard = "whatwg")
-  expect_identical(res$url_standard, "whatwg")
-  expect_identical(res$path_normalization, "none")
-  expect_identical(res$case_handling, "keep")
-  expect_identical(res$path_identity, "none")
-  expect_true(res$customized)
+test_that("url_profile() prints no governed knobs under override", {
+  for (std in list("whatwg", NULL)) {
+    res <- url_profile("rfc-syntax", url_standard = std)
+    expect_identical(res$url_standard, "whatwg")
+    expect_null(res$path_normalization)
+    expect_null(res$case_handling)
+    expect_null(res$path_identity)
+    expect_true(res$customized)
+  }
 })
 
 test_that("controls: the bundle's own standard keeps the exceptions", {
