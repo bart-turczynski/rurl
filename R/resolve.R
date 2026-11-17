@@ -1048,9 +1048,10 @@ resolve_url <- function(relative_or_absolute, base_url,
   # against it only where it is spelled differently from the base as written,
   # and that result replaces the first only where the two are different URLs
   # by the standard's own serializer: where they are the same URL, the
-  # spelling as written stays, so `output = "clean"` keeps a Unicode host or
-  # path of a base the parser would only re-encode. A base that merged wrongly
-  # as written takes the serialized spelling, Unicode included. Each distinct
+  # spelling as written stays, so `output = "clean"` keeps a Unicode path of a
+  # base the parser would only re-encode (its host is the clean presentation's
+  # own, ASCII under the default "keep", RUL-034). A base that merged wrongly
+  # as written takes the serialized spelling. Each distinct
   # result is serialized once.
   respelled <- which(!is.na(parsed_base) & parsed_base != base)
   if (length(respelled) > 0L) {

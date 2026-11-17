@@ -3,7 +3,7 @@
 - The default `url_standard` is now `"whatwg"`, and `NULL` means `"whatwg"`; `get_mailto_recipients()` keeps its `"rfc3986"` default. Pass `url_standard = "rfc3986"` for the RFC 3986 reading (`RURL-mbhuhwzk`).
 - Under the new default, a host ending in a number goes through the IPv4 parser (`http://127.1/` is `127.0.0.1`), and forbidden host code points fail (WHATWG URL, host parsing).
 - Under the new default, hosts are UTS-46 mapped, `%2e` dot segments resolve, triplets keep their hex case, and a backslash separates path segments under a special scheme.
-- Under `"whatwg"`, `host_encoding = "keep"` returns the host as WHATWG parses it, in ASCII, and so do `domain` and `tld`: `bücher.de` is `xn--bcher-kva.de` (WHATWG URL, host parsing) (`RURL-ofortppo`).
+- Under `"whatwg"`, `host_encoding = "keep"` gives the host as WHATWG parses it, in ASCII, in `host`, `domain`, `tld` and `clean_url`: `bücher.de` is `xn--bcher-kva.de` (WHATWG URL, host parsing) (`RURL-ofortppo`).
 - `scheme_acceptance = "general"` no longer needs an explicit `url_standard`.
 - Under the new default, WHATWG percent-encode sets apply to query, fragment and userinfo, a default port is `NA`, edge C0 controls and spaces are stripped, and tabs and newlines anywhere.
 - Under the new default, `file:` URLs follow the WHATWG `file:` states and `resolve_url()` the WHATWG reference rules; `resolve_url(output = "serialized")` no longer needs `url_standard`.

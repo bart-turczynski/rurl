@@ -1283,9 +1283,10 @@ safe_parse_urls <- function(url,
   # standard parse underneath -- which is also what RESOLVES dot segments, via
   # the .URL_STANDARD_PROFILES expansion in .parse_options() (path_identity +
   # path_normalization = "dot_segments"). `host_encoding = "unicode"` makes the
-  # host canonical in ONE direction: the default "keep" echoes whichever
-  # spelling the input used, so the same site yielded `xn--` from one row and
-  # Unicode from the next. Both live in the BUNDLE: `host_encoding =
+  # host canonical in the Unicode direction: under `whatwg` the default "keep"
+  # is the ASCII host the host parser records (RUL-034), and under `rfc3986`
+  # it echoes whichever spelling the input used (`xn--` from one row, Unicode
+  # from the next). Both live in the BUNDLE: `host_encoding =
   # "unicode"` is the bundle's editorial choice, and the global default is
   # already `url_standard = "whatwg"` (ADR 0020).
   seo = list(

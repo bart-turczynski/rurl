@@ -142,7 +142,7 @@ test_that("keep encoding gives the parsed ASCII host under subdomain trim", {
   )
 })
 
-test_that("keep encoding preserves spelling under www if_no_subdomain", {
+test_that("keep gives the parsed ASCII host under www if_no_subdomain", {
   expect_equal(
     parse_host(
       apex_alabel,
