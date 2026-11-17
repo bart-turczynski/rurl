@@ -658,7 +658,52 @@ test_that("an IPv6 literal is normalized only when that comes out shorter", {
   expect_null(p("http://[1:2:3]/"))
   expect_null(p("http://[1:2:3:4:5:6:7:8:9]/"))
   expect_null(p("http://[::1::2]/"))
-  expect_null(p("http://[v1.x]/"))   # no IPvFuture
+  # No IPvFuture on the default axes, which is the WHATWG host parser's answer:
+  # a "[" host is an IPv6 address or a failure. `ip_future` below.
+  expect_null(p("http://[v1.x]/"))
+})
+
+test_that("ip_future = 'accept' stores an RFC 3986 IPvFuture as written", {
+  # RURL-zniwbsdh. RFC 3986 sec 3.2.2: `IP-literal = "[" ( IPv6address /
+  # IPvFuture ) "]"`, `IPvFuture = "v" 1*HEXDIG "." 1*( unreserved /
+  # sub-delims / ":" )`. Only the rfc3986 selector asks for it.
+  expect_identical(.web_ipvfuture_policy("rfc3986"), "accept")
+  expect_identical(.web_ipvfuture_policy("whatwg"), "reject")
+  expect_identical(.web_ipvfuture_policy(NULL), "reject")
+
+  pf <- function(url, ip_future = "accept") {
+    rurl:::.parse_web_url_one(url, host_pct = "keep", pqf_bytes = "reject",
+                              host_charset = "rfc3986", host_ipv4 = "narrow",
+                              empty_path = "keep", host_pct_octets = "any",
+                              port_range = "unbounded", ip_future = ip_future)
+  }
+  # Stored as written: no case fold, no re-serialization.
+  expect_identical(pf("http://[v1.x]/")$host, "[v1.x]")
+  expect_identical(pf("http://[v7.aBc]/")$host, "[v7.aBc]")
+  expect_identical(pf("http://[v1.fe80::1]/")$host, "[v1.fe80::1]")
+  expect_identical(pf("http://[vFF.a-._~!$&'()*+,;=:]/")$host,
+                   "[vFF.a-._~!$&'()*+,;=:]")
+  r <- pf("http://[v1.x]:8080/p?q#f")
+  expect_identical(
+    c(r$host, r$port, r$path, r$query, r$fragment),
+    c("[v1.x]", "8080", "/p", "q", "f")
+  )
+  # IPv6 is unaffected by the axis.
+  expect_identical(pf("http://[::1]/")$host, "[::1]")
+  # Outside the production: still a parse error.
+  expect_null(pf("http://[v1]/"))       # no "."
+  expect_null(pf("http://[v.x]/"))      # no HEXDIG
+  expect_null(pf("http://[vZ.x]/"))     # not a HEXDIG
+  expect_null(pf("http://[v1.]/"))      # empty tail
+  expect_null(pf("http://[v1.x%41]/"))  # "%" is not in the production
+  expect_null(pf("http://[v1.x/y]/"))   # "/" ends the authority first
+  expect_null(pf("http://[v1.x@y]/"))
+  expect_null(pf("http://[]/"))
+  expect_null(pf("http://[v1.é]/"))
+  expect_null(pf(NA_character_))
+  # "reject" is the WHATWG answer, on the same other axes.
+  expect_null(pf("http://[v1.x]/", ip_future = "reject"))
+  expect_null(pf("http://[v1.fe80::1]/", ip_future = "reject"))
 })
 
 test_that("inet_ntop's dotted-quad rule is libcurl's narrowed one", {

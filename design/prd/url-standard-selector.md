@@ -279,7 +279,7 @@ Two pieces of parse metadata are added:
 
 | Field | Type | Purpose |
 |---|---|---|
-| `host_type` | `domain` / `ipv4` / `ipv6` / `reg-name` / `missing` | Lets callers distinguish RFC reg-name from coerced WHATWG IPv4. |
+| `host_type` | `domain` / `ipv4` / `ipv6` / `ipvfuture` (`rfc3986` only, ADR 0012) / `reg-name` / `missing` | Lets callers distinguish RFC reg-name from coerced WHATWG IPv4. |
 | `diagnostics` | character vector of diagnostic tokens per URL | Non-fatal validation/safety facts. |
 
 `host_type` is a function of `(host, url_standard)`, **not** of the host string

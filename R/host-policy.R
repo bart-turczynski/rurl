@@ -116,8 +116,10 @@
   # genuinely non-LDH byte) rather than short-circuiting to NA.
   ascii_host <- ifelse(is.na(host_idna), host_keep, host_idna)
 
-  present <- host_type %in% c("domain", "ipv4", "ipv6", "reg-name")
-  is_ip <- host_type %in% c("ipv4", "ipv6")
+  present <- host_type %in%
+    c("domain", "ipv4", "ipv6", "ipvfuture", "reg-name")
+  # An rfc3986 IPvFuture literal is an IP-literal too (RURL-zniwbsdh).
+  is_ip <- host_type %in% c("ipv4", "ipv6", "ipvfuture")
   is_domain <- !is.na(host_type) & host_type == "domain"
   is_name <- host_type %in% c("domain", "reg-name")
 

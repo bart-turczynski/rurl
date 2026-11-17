@@ -14,6 +14,7 @@
 - Under `"rfc3986"`, `path_encoding = "encode"` only adds escapes: `%2F`, empty segments and `pchar` sub-delimiters survive (RFC 3986 §3.3) (`RURL-dbyavcjt`).
 - `path_encoding = "decode"` decodes only unreserved and non-ASCII UTF-8 triplets; reserved ones such as `%2F` and `%3F` stay encoded (RFC 3986 §2.2) (`RURL-eokizmdi`).
 - Under `"rfc3986"`, `host_encoding = "idna"` and `"unicode"` keep a host whose triplets cannot safely decode (reserved, `%25`, control, invalid UTF-8) as written: `a%2Fb` no longer becomes `a/b` (RFC 3986 §2.2) (`RURL-rhwcrezl`).
+- Under `"rfc3986"`, an IPvFuture host such as `http://[v1.x]/` parses as an IP literal, and `get_host_type()` reports it as `"ipvfuture"` (RFC 3986 §3.2.2) (`RURL-zniwbsdh`).
 - rurl now requires pslr 1.2.2 or later, which fixes every parse failing under a Turkish or Azerbaijani locale (`RURL-tnsrcqwi`).
 - `get_mailto_recipients()` gains a `mailto_local_part_raw` column before `mailto_local_part_form`, moving every later column one place right (`RURL-xwsyfkwh`).
 - `get_mailto_recipients()` reports a backslash-escaped null octet in a quoted local part as `"quoted-string"`, and a quoted U+007F projects as `"unavailable"`, not `"ascii"` (RFC 5322 §4.1) (`RURL-mxsyzrho`).
