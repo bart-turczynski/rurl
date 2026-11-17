@@ -79,7 +79,9 @@ the input, not about the call.
 \description{
 Companion helper for the \code{url_standard} selector: reports the host
 \emph{type} of each URL as exactly one of \code{"domain"}, \code{"ipv4"},
-\code{"ipv6"}, \code{"reg-name"}, or \code{"missing"}. Unlike a raw host
+\code{"ipv6"}, \code{"ipvfuture"}, \code{"reg-name"}, or \code{"missing"}.
+\code{"ipvfuture"} is an RFC 3986 IPvFuture literal such as \code{[v1.x]},
+which only \code{"rfc3986"} parses. Unlike a raw host
 string, \code{host_type} is a function of \emph{both} the host and the
 selected standard: the numeric host \code{2130706433} is a \code{"reg-name"}
 under \code{"rfc3986"} but an \code{"ipv4"} address under \code{"whatwg"}.

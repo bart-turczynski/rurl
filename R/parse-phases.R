@@ -346,8 +346,12 @@
 #   is_dotted_name  - >= 2 non-empty dot-separated labels (example.com, a.b.c)
 #   is_ipish        - the host is an IP *attempt*: all-decimal / 0x-hex / octal
 #                     / short-form groups, or anything containing ':' (IPv6)
-#   is_canonical_ip - a valid IPv4 dotted-quad or bracketed IPv6 per the strict
-#                     detector (rejects leading-zero octets and coerced forms)
+#   is_canonical_ip - a valid IPv4 dotted-quad, bracketed IPv6 or bracketed
+#                     RFC 3986 IPvFuture per the strict detector (rejects
+#                     leading-zero octets and coerced forms). It exempts the
+#                     row from the `bad_ip` reject and makes it `host_like`
+#                     for scheme inference; only the rfc3986 parsers then
+#                     accept an IPvFuture (RURL-zniwbsdh)
 # Purely a function of the input string; used to drive rejection in Phase 1.
 .classify_input_host_vec <- function(url) {
   # Strip a leading "scheme://" or scheme-relative "//", then the path/query/
@@ -2206,7 +2210,8 @@
   .derive_final_scheme_vec(protocol_handling, looks_like_protocol, raw_scheme)
 }
 
-# Phase 5 (vector): detect whether each host is an IP literal (IPv4 or IPv6).
+# Phase 5 (vector): detect whether each host is an IP literal (IPv4, IPv6 or
+# a bracketed RFC 3986 IPvFuture).
 # NA/"" hosts are FALSE; IPv4 requires four dot-separated CANONICAL octets --
 # 0..255 with NO leading zeros (D3: a leading zero is octal in inet_aton, so
 # "192.168.010.1" silently means "192.168.8.1"; rurl refuses to guess and treats
@@ -2252,7 +2257,16 @@
     ipv6[no_tail] <- (hex_shape & has_colon)[no_tail]
   }
 
-  ipv4 | ipv6
+  # IPvFuture: RFC 3986 sec 3.2.2's other IP-literal (RURL-zniwbsdh), so no
+  # www, PSL, domain or IDNA step reads it as a name, and the Phase-1 gate
+  # does not reject `[v1.fe80::1]` as a malformed IPv6 attempt. Recognizing
+  # the shape accepts nothing: only the rfc3986 selector parses one
+  # (`.web_ipvfuture_policy()`, and the general route), and the `whatwg`
+  # parsers still fail it.
+  ipvfuture <- valid_h &
+    .state_bytes_test(raw_host, .RFC3986_BRACKET_IPVFUTURE_RE)
+
+  ipv4 | ipv6 | ipvfuture
 }
 
 # Phase 5 (scalar wrapper): delegates to .detect_ip_host_vec().

@@ -2359,6 +2359,9 @@ safe_parse_urls <- function(url,
   # `rfc3986` judges the raw token and leaves the octet encoded.
   host_pct_octets <- .web_host_pct_octets_policy(opts$url_standard)
   port_range <- .web_port_range_policy(opts$url_standard)
+  # Whether a bracketed host may be an RFC 3986 IPvFuture literal
+  # (RURL-zniwbsdh). See `ip_future` in R/parse-web.R.
+  ip_future <- .web_ipvfuture_policy(opts$url_standard)
   parsed_list <- vector("list", n)
   parse_idx <- which(web_parseable)
   if (length(parse_idx) > 0L) {
@@ -2368,7 +2371,7 @@ safe_parse_urls <- function(url,
       host_charset = host_charset, host_ipv4 = host_ipv4,
       empty_path = empty_path, host_pct_octets = host_pct_octets,
       port_range = port_range, pqf_source = pqf_source,
-      userinfo_source = userinfo_source
+      userinfo_source = userinfo_source, ip_future = ip_future
     )
   }
   web_ok <- web_parseable & !vapply(parsed_list, is.null, logical(1))
@@ -3259,7 +3262,8 @@ safe_parse_urls <- function(url,
     host_pct_octets = .web_host_pct_octets_policy(url_standard),
     port_range = .web_port_range_policy(url_standard),
     pqf_source = .web_pqf_source_policy(url_standard),
-    userinfo_source = .web_userinfo_source_policy(url_standard)
+    userinfo_source = .web_userinfo_source_policy(url_standard),
+    ip_future = .web_ipvfuture_policy(url_standard)
   )
   if (is.null(parsed_web)) {
     return(NULL)
