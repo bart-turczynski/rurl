@@ -60,7 +60,7 @@ test_that("the diagnostics vocabulary is the pinned closed set", {
 test_that("the host_type vocabulary matches PRD §6.3", {
   expect_setequal(
     rurl:::.HOST_TYPES,
-    c("domain", "ipv4", "ipv6", "reg-name", "missing")
+    c("domain", "ipv4", "ipv6", "ipvfuture", "reg-name", "missing")
   )
 })
 

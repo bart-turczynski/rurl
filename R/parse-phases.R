@@ -2206,7 +2206,8 @@
   .derive_final_scheme_vec(protocol_handling, looks_like_protocol, raw_scheme)
 }
 
-# Phase 5 (vector): detect whether each host is an IP literal (IPv4 or IPv6).
+# Phase 5 (vector): detect whether each host is an IP literal (IPv4, IPv6 or
+# a bracketed RFC 3986 IPvFuture).
 # NA/"" hosts are FALSE; IPv4 requires four dot-separated CANONICAL octets --
 # 0..255 with NO leading zeros (D3: a leading zero is octal in inet_aton, so
 # "192.168.010.1" silently means "192.168.8.1"; rurl refuses to guess and treats
@@ -2252,7 +2253,16 @@
     ipv6[no_tail] <- (hex_shape & has_colon)[no_tail]
   }
 
-  ipv4 | ipv6
+  # IPvFuture: RFC 3986 sec 3.2.2's other IP-literal (RURL-zniwbsdh), so no
+  # www, PSL, domain or IDNA step reads it as a name, and the Phase-1 gate
+  # does not reject `[v1.fe80::1]` as a malformed IPv6 attempt. Recognizing
+  # the shape accepts nothing: only the rfc3986 selector parses one
+  # (`.web_ipvfuture_policy()`, and the general route), and the `whatwg`
+  # parsers still fail it.
+  ipvfuture <- valid_h &
+    .state_bytes_test(raw_host, .RFC3986_BRACKET_IPVFUTURE_RE)
+
+  ipv4 | ipv6 | ipvfuture
 }
 
 # Phase 5 (scalar wrapper): delegates to .detect_ip_host_vec().

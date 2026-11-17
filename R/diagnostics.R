@@ -85,7 +85,9 @@
 # these per URL once the host model (RURL-luwvkwhd) lands; T2 leaves it NA.
 # host_type is a function of (host, url_standard), not the host string alone:
 # `2130706433` is `reg-name` under rfc3986 and `ipv4` under whatwg.
-.HOST_TYPES <- c("domain", "ipv4", "ipv6", "reg-name", "missing")
+# `ipvfuture` is RFC 3986 sec 3.2.2's other IP-literal, which only rfc3986
+# parses (ADR 0012's host form; RURL-zniwbsdh).
+.HOST_TYPES <- c("domain", "ipv4", "ipv6", "ipvfuture", "reg-name", "missing")
 
 # The scheme_class vocabulary (PRD v2 §5 D7, RURL-jlvyjwog). get_scheme_class()
 # emits exactly one of these per URL. Unlike host_type, the classification
@@ -190,10 +192,17 @@
   host_type[live & host_missing] <- "missing"
 
   is_ip <- a$is_ip_host & !is.na(a$is_ip_host)
+  # A bracketed IPvFuture literal is an IP host (`.detect_ip_host_vec()`) but
+  # neither address family, whatever its tail holds (`[v1.fe80::1]` has
+  # colons): classify it first (RURL-zniwbsdh).
+  is_ipvf <- is_ip & !host_missing &
+    .state_bytes_test(final_host, .RFC3986_BRACKET_IPVFUTURE_RE)
+  host_type[live & is_ipvf] <- "ipvfuture"
+  is_addr <- is_ip & !is_ipvf
   host_has_colon <- .bytes_detect(final_host, ":", fixed = TRUE)
   host_has_colon[is.na(host_has_colon)] <- FALSE
-  host_type[live & !host_missing & is_ip & host_has_colon] <- "ipv6"
-  host_type[live & !host_missing & is_ip & !host_has_colon] <- "ipv4"
+  host_type[live & !host_missing & is_addr & host_has_colon] <- "ipv6"
+  host_type[live & !host_missing & is_addr & !host_has_colon] <- "ipv4"
 
   has_domain <- !is.na(a$domain_ascii) & nzchar(a$domain_ascii)
   non_ip <- live & !host_missing & !is_ip

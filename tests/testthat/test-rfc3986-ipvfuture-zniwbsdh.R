@@ -7,22 +7,31 @@
 
 ipvf_urls <- c("http://[v1.x]/", "http://[v7.aBc]/", "http://[v1.fe80::1]/")
 ipvf_hosts <- c("[v1.x]", "[v7.aBc]", "[v1.fe80::1]")
+# The parser stores the literal as written (test-parse-web.R), and the general
+# route reports it so. The rfc3986 profile's web-route case handling then
+# lowercases a bracketed host exactly as it does an IPv6 one (`[AB::CD]` is
+# `[ab::cd]` there too); the profile refuses an explicit `case_handling`.
+ipvf_lower <- c("[v1.x]", "[v7.abc]", "[v1.fe80::1]")
+ipvf_by_route <- list(general = ipvf_hosts, web = ipvf_lower)
 
 test_that("rfc3986 parses an IPvFuture host on the web route, as written", {
   for (acc in c("general", "web")) {
     r <- safe_parse_urls(ipvf_urls, url_standard = "rfc3986",
                          scheme_acceptance = acc)
     expect_identical(r$parse_status, rep("ok", 3L))
-    expect_identical(r$host, ipvf_hosts)
+    expect_identical(r$host, ipvf_by_route[[acc]])
     expect_identical(r$is_ip_host, rep(TRUE, 3L))
     expect_identical(r$domain, rep(NA_character_, 3L))
     expect_identical(r$tld, rep(NA_character_, 3L))
   }
-  expect_identical(get_host(ipvf_urls, url_standard = "rfc3986"), ipvf_hosts)
-  expect_identical(
-    get_host_type(ipvf_urls, url_standard = "rfc3986"),
-    rep("ipvfuture", 3L)
-  )
+  expect_identical(get_host(ipvf_urls, url_standard = "rfc3986"), ipvf_lower)
+  for (acc in c("general", "web")) {
+    expect_identical(
+      get_host_type(ipvf_urls, url_standard = "rfc3986",
+                    scheme_acceptance = acc),
+      rep("ipvfuture", 3L)
+    )
+  }
   r <- safe_parse_urls("http://[v1.x]:8080/p?q#f", url_standard = "rfc3986")
   expect_identical(
     c(r$parse_status, r$host, as.character(r$port), r$path),
@@ -31,15 +40,19 @@ test_that("rfc3986 parses an IPvFuture host on the web route, as written", {
 })
 
 test_that("an IPvFuture host is kept as written under every host_encoding", {
+  # No IDNA or Unicode mapping touches an IP literal: each encoding gives the
+  # `keep` answer on both routes.
   for (enc in c("keep", "idna", "unicode")) {
+    for (acc in c("general", "web")) {
+      expect_identical(
+        safe_parse_urls(ipvf_urls, url_standard = "rfc3986",
+                        scheme_acceptance = acc, host_encoding = enc)$host,
+        ipvf_by_route[[acc]]
+      )
+    }
     expect_identical(
       get_host(ipvf_urls, url_standard = "rfc3986", host_encoding = enc),
-      ipvf_hosts
-    )
-    expect_identical(
-      safe_parse_urls(ipvf_urls, url_standard = "rfc3986",
-                      host_encoding = enc)$host,
-      ipvf_hosts
+      ipvf_lower
     )
   }
 })
@@ -80,6 +93,35 @@ test_that("whatwg still rejects an IPvFuture host; the controls hold", {
   r <- safe_parse_urls("foo://[v1.x]/", url_standard = "rfc3986",
                        scheme_acceptance = "general")
   expect_identical(c(r$parse_status, r$host), c("ok", "[v1.x]"))
+  # ...and is now an IP literal of the ipvfuture type, not a reg-name.
+  expect_true(r$is_ip_host)
+  expect_identical(
+    get_host_type("foo://[v1.x]/", url_standard = "rfc3986",
+                  scheme_acceptance = "general"),
+    "ipvfuture"
+  )
+})
+
+test_that("no ipv6-* diagnostic fires on an IPvFuture literal", {
+  d <- get_url_diagnostics(ipvf_urls, url_standard = "rfc3986")
+  expect_false(any(grepl("^ipv6-", unlist(d))))
+  expect_identical(lengths(d), c(0L, 0L, 0L))
+})
+
+test_that("host policy judges an IPvFuture host as an IP literal", {
+  expect_identical(
+    is_valid_host(ipvf_urls, url_standard = "rfc3986"), rep(TRUE, 3L)
+  )
+  expect_identical(
+    is_valid_host(ipvf_urls, rule = "url", url_standard = "rfc3986"),
+    rep(TRUE, 3L)
+  )
+  ch <- check_hosts(c(ipvf_urls, "foo://[v1.x]/"), url_standard = "rfc3986",
+                    scheme_acceptance = "general")
+  expect_identical(ch$host_type, rep("ipvfuture", 4L))
+  expect_identical(ch$web, rep(TRUE, 4L))
+  expect_identical(ch$registrable, rep(FALSE, 4L))
+  expect_true(all(vapply(ch$reasons, identical, logical(1), "ip-literal")))
 })
 
 test_that("an input outside the IPvFuture production stays an error", {
@@ -90,9 +132,16 @@ test_that("an input outside the IPvFuture production stays an error", {
     safe_parse_urls(bad, url_standard = "rfc3986")$parse_status,
     rep("error", length(bad))
   )
-  latin1 <- "http://[v1.x]/p\xe9"
+  # A latin1-marked byte inside the brackets is not in the production.
+  latin1 <- "http://[v1.\xe9]/"
   Encoding(latin1) <- "latin1"
   expect_identical(
-    safe_parse_urls(latin1, url_standard = "rfc3986")$host, "[v1.x]"
+    safe_parse_urls(latin1, url_standard = "rfc3986")$parse_status, "error"
+  )
+  # A raw non-ASCII byte in the PATH is an rfc3986 error whatever the host
+  # (no `pchar` holds it); its triplet spelling parses.
+  expect_identical(
+    safe_parse_urls("http://[v1.x]/p%E9", url_standard = "rfc3986")$host,
+    "[v1.x]"
   )
 })

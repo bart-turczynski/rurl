@@ -87,7 +87,10 @@
 #   host      percent-DECODED first (a "%" not followed by two hex digits is a
 #             parse error), then every decoded byte must be in
 #             [A-Za-z0-9._~|-]; then libcurl's IPv4 normalization. A bracketed
-#             host is an IPv6 literal, validated and re-serialized.
+#             host is an IPv6 literal, validated and re-serialized. Under
+#             `ip_future = "accept"` (the rfc3986 selector) it may instead be
+#             an RFC 3986 sec 3.2.2 IPvFuture literal, stored as written.
+#             Documented at `.web_ipvfuture_policy()` below.
 #             This is `host_pct = "decode"` with `host_charset = "narrow"`, the
 #             parser defaults. `host_pct` changes how a parsed host is
 #             SPELLED BACK and `host_charset` which literal bytes it may hold;
@@ -602,6 +605,25 @@
   if (identical(url_standard, "rfc3986")) "unbounded" else "u16"
 }
 
+# The `ip_future` setting each selected standard asks for -- whether a
+# bracketed host may be an IPvFuture literal as well as an IPv6 address.
+#
+#   "reject"  a "[" host is an IPv6 address or a parse error. WHATWG's host
+#             parser: "If input starts with U+005B ([) ... return the result of
+#             IPv6 parsing input with its leading U+005B ([) and trailing
+#             U+005D (]) removed", and the IPv6 parser has no "v" form.
+#   "accept"  RFC 3986 sec 3.2.2: `IP-literal = "[" ( IPv6address / IPvFuture )
+#             "]"`, `IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims /
+#             ":" )`. The literal is stored AS WRITTEN: the RFC names no
+#             canonical spelling for a future version, so the record keeps the
+#             source one (RUL-007), as the general route always has.
+#
+# Rejecting it under `rfc3986` was a WHATWG rule enforced under the RFC selector
+# (RURL-zniwbsdh); ADR 0012 D2 already lists `ipvfuture` as an RFC host form.
+.web_ipvfuture_policy <- function(url_standard) {
+  if (identical(url_standard, "rfc3986")) "accept" else "reject"
+}
+
 # RFC 3986 host rendering: decode the triplets section 6.2.2.2 permits decoding
 # (unreserved only) and leave every other one ENCODED, hex uppercased per
 # section 6.2.2.1. Malformed "%" is still a parse error, exactly as in
@@ -963,7 +985,8 @@
 # rendering, 11 literal bytes) and `whatwg` (decoded rendering, 15) at once.
 .web_parse_host <- function(host, host_pct = "decode",
                             host_charset = "narrow", host_ipv4 = "narrow",
-                            host_pct_octets = "restricted") {
+                            host_pct_octets = "restricted",
+                            ip_future = "reject") {
   # Byte-based throughout: `nchar()`/`substring()`/`endsWith()` all throw
   # "invalid multibyte string" on a declared-UTF-8 host token holding invalid
   # octets -- and such a token must REJECT, not error.
@@ -974,6 +997,12 @@
   if (hb[1L] == 0x5BL) {
     if (hb[length(hb)] != 0x5DL) {
       return(NULL)
+    }
+    # An IPvFuture literal is stored as written (`ip_future`). No IPv6 address
+    # starts with "v", so the two productions cannot both match.
+    if (identical(ip_future, "accept") &&
+          .state_bytes_test(.web_chr(hb), .RFC3986_BRACKET_IPVFUTURE_RE)) {
+      return(.web_chr(hb))
     }
     return(.web_ipv6_serialize(.web_chr(hb[-c(1L, length(hb))])))
   }
@@ -1237,6 +1266,14 @@
 # anywhere after the authority. Reading the host token the parser already cut is
 # not a tidy-up; it is the only way the answer stops depending on the rest of
 # the string.
+#
+# `ip_future` -- whether a bracketed host may be an RFC 3986 IPvFuture literal
+# (RURL-zniwbsdh):
+#
+#   "reject"  only an IPv6 address may be bracketed. The parser default and
+#             the `whatwg` setting.
+#   "accept"  `[v<hex>.<chars>]` is also a host, stored as written. The
+#             `rfc3986` setting; see `.web_ipvfuture_policy()`.
 .parse_web_url_one <- function(url, last_at_userinfo = FALSE,
                                host_pct = "decode", pqf_bytes = "reject",
                                host_charset = "narrow",
@@ -1245,7 +1282,8 @@
                                host_pct_octets = "restricted",
                                port_range = "u16",
                                pqf_source = "normalize",
-                               userinfo_source = "normalize") {
+                               userinfo_source = "normalize",
+                               ip_future = "reject") {
   if (is.na(url)) {
     return(NULL)
   }
@@ -1439,7 +1477,7 @@
   }
 
   host <- .web_parse_host(
-    host_token, host_pct, host_charset, host_ipv4, host_pct_octets
+    host_token, host_pct, host_charset, host_ipv4, host_pct_octets, ip_future
   )
   if (is.null(host)) {
     return(NULL)
