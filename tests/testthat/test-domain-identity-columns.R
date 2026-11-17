@@ -33,9 +33,13 @@ test_that("identity columns are encoding-independent across host_encoding", {
 })
 
 test_that("host_encoding still only selects the rendering `domain`/`tld`", {
-  # keep: domain mirrors each input host's own spelling.
+  # keep: under the default whatwg, the ASCII host the host parser records
+  # (RUL-034); under rfc3986, each input host's own spelling.
   keep <- safe_parse_urls(c(unicode_url, alabel_url), host_encoding = "keep")
-  expect_identical(keep$domain, c("münchen.de", "xn--mnchen-3ya.de"))
+  expect_identical(keep$domain, c("xn--mnchen-3ya.de", "xn--mnchen-3ya.de"))
+  rfc_keep <- safe_parse_urls(c("http://a%C3%A9b.com/", alabel_url),
+                              url_standard = "rfc3986", host_encoding = "keep")
+  expect_identical(rfc_keep$domain, c("aéb.com", "xn--mnchen-3ya.de"))
   # idna: both render as the A-label; unicode: both render decoded.
   idna <- safe_parse_urls(c(unicode_url, alabel_url), host_encoding = "idna")
   expect_identical(idna$domain, c("xn--mnchen-3ya.de", "xn--mnchen-3ya.de"))
@@ -62,12 +66,14 @@ test_that("IP hosts, null rows, and no-TLD hosts yield NA identity columns", {
 })
 
 test_that("identity columns match host_encoding-selected domain/tld per row", {
-  # Under keep, domain equals whichever spelling matches the input host: the
-  # A-label input picks domain_ascii, the Unicode input picks domain_unicode.
+  # Under whatwg keep, domain is the ASCII spelling for either input
+  # (RUL-034): both rows pick domain_ascii.
   df <- safe_parse_urls(c(alabel_url, unicode_url), host_encoding = "keep")
-  expect_identical(df$domain[1], df$domain_ascii[1])
-  expect_identical(df$domain[2], df$domain_unicode[2])
-  expect_identical(df$tld[1], df$tld_ascii[1])
+  expect_identical(df$domain, df$domain_ascii)
+  expect_identical(df$tld, df$tld_ascii)
+  # "unicode" picks domain_unicode on both rows.
+  df <- safe_parse_urls(c(alabel_url, unicode_url), host_encoding = "unicode")
+  expect_identical(df$domain, df$domain_unicode)
 })
 
 test_that("scalar safe_parse_url() exposes the identity columns too", {
@@ -124,13 +130,16 @@ test_that("a percent-encoded rfc3986 reg-name still classifies", {
 test_that("the decoded view agrees with what whatwg computes for that host", {
   # The annotation is the EXISTING pslr path applied to the decoded candidate,
   # so the two profiles agree on the annotation even though they disagree on
-  # the host spelling. IDNA maps the soft hyphen away under both.
+  # the host spelling. IDNA maps the soft hyphen away under both. whatwg
+  # "keep" spells its `domain` in ASCII (RUL-034), so the rfc3986 decoded
+  # view is compared with whatwg's Unicode identity columns.
   for (u in c("http://a%C3%A9b.com/", "http://a%E4%B8%ADb.com/",
               "http://a%C2%ADb.com/")) {
     rfc <- safe_parse_url(u, url_standard = "rfc3986")
     web <- safe_parse_url(u, url_standard = "whatwg")
-    expect_identical(rfc$domain, web$domain, info = u)
-    expect_identical(rfc$tld, web$tld, info = u)
+    expect_identical(rfc$domain, web$domain_unicode, info = u)
+    expect_identical(rfc$tld, web$tld_unicode, info = u)
+    expect_identical(rfc$domain_ascii, web$domain, info = u)
     # Identity still differs -- only the annotation is shared.
     expect_false(identical(rfc$host, web$host), info = u)
   }

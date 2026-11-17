@@ -107,15 +107,53 @@ test_that("whatwg: UTS #46 maps both marks to nothing, already right", {
   # Domain to ASCII (UTS #46 section 4, mapping step) maps U+FEFF and U+200B
   # to nothing, so the host the rendering sees has no mark and the first
   # label is the A-label. `.split_host_labels()` never sees the mark here.
+  # "unicode" renders the U-label; "keep" is the parsed ASCII host
+  # (RUL-034, RURL-giexrukh).
+  want <- c(unicode = paste0(beta, ".example"), keep = "xn--nxasmq6b.example")
   for (m in c(bom, zwsp)) {
     for (enc in c("unicode", "keep")) {
       expect_identical(
         arm_parse(paste0("http://", m, "xn--nxasmq6b.example/"), "whatwg",
                   host_encoding = enc)$host,
-        paste0(beta, ".example"), label = paste(utf8ToInt(m), enc)
+        unname(want[enc]), label = paste(utf8ToInt(m), enc)
       )
     }
   }
+})
+
+# RURL-giexrukh (folded into RURL-ofortppo, RUL-034): UTS #46 mapping (section
+# 4, step 1) removes U+FEFF and U+200B, so the WHATWG host parser's domain to
+# ASCII gives the A-label whether a mark leads it or not, and "keep" returns
+# that parsed host. The mark used to hide the `xn--` prefix from the A-label
+# test, which ran on the unmapped host, so the mark-led host rendered as a
+# U-label.
+test_that("whatwg keep: a mark-led A-label host is the BOM-less host", {
+  plain <- safe_parse_url("http://xn--nxasmq6b.com/",
+                          url_standard = "whatwg")$host
+  expect_identical(plain, "xn--nxasmq6b.com")
+  hosts <- c(
+    paste0(bom, "xn--nxasmq6b.com"),
+    paste0(zwsp, "xn--nxasmq6b.com"),
+    paste0(bom, bom, "xn--nxasmq6b.com")
+  )
+  for (h in hosts) {
+    u <- paste0("http://", h, "/")
+    expect_identical(safe_parse_url(u, url_standard = "whatwg")$host, plain,
+                     label = paste(utf8ToInt(h)[1L], "keep"))
+    expect_identical(safe_parse_url(u)$host, plain)
+    expect_identical(safe_parse_url(u)$domain, plain)
+  }
+  # A mark before a later label maps away the same way.
+  expect_identical(
+    safe_parse_url(paste0("http://a.", bom, "xn--nxasmq6b.com/"))$host,
+    "a.xn--nxasmq6b.com"
+  )
+  # "unicode" still renders the U-label.
+  expect_identical(
+    safe_parse_url(paste0("http://", bom, "xn--nxasmq6b.com/"),
+                   host_encoding = "unicode")$host,
+    paste0(beta, ".com")
+  )
 })
 
 test_that("signature: the other encodings and the PSL columns do not move", {
@@ -123,11 +161,12 @@ test_that("signature: the other encodings and the PSL columns do not move", {
   # returns the host as parsed, and "idna" encodes the whole label, mark and
   # all; the domain and TLD come from the PSL seam (pslr), not the split.
   # Under rfc3986 the mark-led host is a parse error (see the header); under
-  # whatwg (the default) UTS #46 drops the mark, so the encodings agree.
+  # whatwg (the default) UTS #46 drops the mark, so "keep" and "idna" agree
+  # on the parsed A-label (RUL-034, RURL-giexrukh).
   expect_rfc3986_rejects(paste0("http://", bom, "xn--nxasmq6b.com/"))
   u <- paste0("http://", bom, "xn--nxasmq6b.com/")
   expect_identical(safe_parse_url(u, host_encoding = "keep")$host,
-                   paste0(beta, ".com"))
+                   "xn--nxasmq6b.com")
   expect_identical(safe_parse_url(u, host_encoding = "idna")$host,
                    "xn--nxasmq6b.com")
   p <- safe_parse_url(u, host_encoding = "unicode")

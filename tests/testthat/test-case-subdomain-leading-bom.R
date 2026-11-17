@@ -389,12 +389,13 @@ test_that("rows the subdomain fix does not reach keep their values", {
     "\ufeff\ufeffwww.a.example.com", "\ufeffa.B.example.com",
     "\ufeffExample.com"
   )))
+  # The whatwg host is the ASCII host the host parser records (RUL-034).
   expect_identical(
     safe_parse_urls(u, url_standard = "whatwg",
                     subdomain_levels_to_keep = 2)$host,
     c("www.example.com", "www.example.com", "www.a.b.example.com",
-      "a.b.example.com", "www.com", "example.com", "www.m\u00fcnchen.de",
-      "a.m\u00fcnchen.de", "www.a.b.example.com", "ab.www.example.com",
+      "a.b.example.com", "www.com", "example.com", "www.xn--mnchen-3ya.de",
+      "a.xn--mnchen-3ya.de", "www.a.b.example.com", "ab.www.example.com",
       "www.a.example.com", "a.b.example.com", "example.com")
   )
   expect_identical(

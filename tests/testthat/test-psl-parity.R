@@ -29,8 +29,17 @@ test_that("exception rules (!www.ck under *.ck) are honored", {
 
 test_that("IDN hosts resolve a registered domain (Unicode output)", {
   # 1.2.0: get_domain("example.рф", source = "all") -> NA (bug).
-  expect_identical(unname(get_domain("https://example.рф/x")), "example.рф")
-  expect_identical(unname(get_tld("https://example.рф/x")), "рф")
+  expect_identical(
+    unname(get_domain("https://example.рф/x", host_encoding = "unicode")),
+    "example.рф"
+  )
+  expect_identical(
+    unname(get_tld("https://example.рф/x", host_encoding = "unicode")), "рф"
+  )
+  # The default whatwg "keep" spells it as the parsed ASCII host (RUL-034).
+  expect_identical(
+    unname(get_domain("https://example.рф/x")), "example.xn--p1ai"
+  )
 })
 
 test_that("unknown TLDs yield NA (pslr unknown = 'na', not the implicit *)", {
@@ -59,7 +68,7 @@ test_that("source selection maps to the pslr section", {
 })
 
 test_that("domain/TLD spelling follows host_encoding (default keep)", {
-  # keep (default) mirrors the input spelling: an A-label host stays A-label.
+  # keep (default) is the parsed ASCII host: an A-label host stays A-label.
   expect_identical(
     unname(get_tld("https://example.xn--p1ai/x")), "xn--p1ai"
   )
@@ -77,8 +86,9 @@ test_that("domain/TLD spelling follows host_encoding (default keep)", {
     )),
     "example.рф"
   )
-  # A Unicode host keeps Unicode under keep, and idna re-encodes it.
-  expect_identical(unname(get_tld("https://example.рф/x")), "рф")
+  # A Unicode host is the parsed ASCII host under whatwg keep (RUL-034), as
+  # under idna.
+  expect_identical(unname(get_tld("https://example.рф/x")), "xn--p1ai")
   expect_identical(
     unname(get_tld("https://example.рф/x", host_encoding = "idna")), "xn--p1ai"
   )

@@ -426,16 +426,19 @@ test_that("case_handling = 'upper' on a host stays Unicode and locale-pinned", {
   # mapping under the pinned non-tailoring locale. A future refactor that
   # "unifies" the host branch on the ASCII helpers would produce the mixed-case
   # "BüCHER.EXAMPLE" and fail here. Under the default whatwg the fold shapes
-  # clean_url only (ADR 0020 D4a), so it is read there.
+  # clean_url only (ADR 0020 D4a), so it is read there; the Unicode host is
+  # the "unicode" display form (the default "keep" is ASCII, RUL-034).
   expect_identical(
-    get_clean_url("https://bücher.example/", case_handling = "upper"),
+    get_clean_url("https://bücher.example/", case_handling = "upper",
+                    host_encoding = "unicode"),
     "HTTPS://BÜCHER.EXAMPLE/"
   )
 
   .with_turkish_stri_locale({
     # Unicode-aware ...
     expect_identical(
-      get_clean_url("https://bücher.example/", case_handling = "upper"),
+      get_clean_url("https://bücher.example/", case_handling = "upper",
+                    host_encoding = "unicode"),
       "HTTPS://BÜCHER.EXAMPLE/"
     )
     # ... AND locale-invariant: Turkish would uppercase "i" to the dotted "İ".

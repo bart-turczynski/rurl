@@ -81,39 +81,40 @@ test_that("whatwg: IDN and ACE twins keep their policy output", {
   # Hosts UTS-46 maps without an ignorable code point (case, an IDN, an ACE
   # label, a fullwidth letter outside the www label): the policies already
   # read them the WHATWG way, and the fix must not move them. A www label
-  # UTS-46 maps to `www` does move; see the next test.
+  # UTS-46 maps to `www` does move; see the next test. The host each gives is
+  # the parsed ASCII host under the default "keep" (RUL-034).
   urls <- c("http://www.b\u00fccher.de/", "http://B\u00dcCHER.de/",
             "http://www.xn--bcher-kva.de/", "http://a.b.b\u00fccher.de/",
             "http://www.\uff45xample.com/")
   host <- function(policy) policy_parse(urls, "whatwg", policy)$host
   expect_identical(host("none"), c(
-    "www.b\u00fccher.de", "b\u00fccher.de", "www.xn--bcher-kva.de",
-    "a.b.b\u00fccher.de", "www.example.com"
+    "www.xn--bcher-kva.de", "xn--bcher-kva.de", "www.xn--bcher-kva.de",
+    "a.b.xn--bcher-kva.de", "www.example.com"
   ))
   expect_identical(host("strip"), c(
-    "b\u00fccher.de", "b\u00fccher.de", "xn--bcher-kva.de",
-    "a.b.b\u00fccher.de", "example.com"
+    "xn--bcher-kva.de", "xn--bcher-kva.de", "xn--bcher-kva.de",
+    "a.b.xn--bcher-kva.de", "example.com"
   ))
   expect_identical(host("keep"), c(
-    "www.b\u00fccher.de", "www.b\u00fccher.de", "www.xn--bcher-kva.de",
-    "www.a.b.b\u00fccher.de", "www.example.com"
+    "www.xn--bcher-kva.de", "www.xn--bcher-kva.de", "www.xn--bcher-kva.de",
+    "www.a.b.xn--bcher-kva.de", "www.example.com"
   ))
   expect_identical(host("if_no_subdomain"), c(
-    "www.b\u00fccher.de", "www.b\u00fccher.de", "www.xn--bcher-kva.de",
-    "a.b.b\u00fccher.de", "www.example.com"
+    "www.xn--bcher-kva.de", "www.xn--bcher-kva.de", "www.xn--bcher-kva.de",
+    "a.b.xn--bcher-kva.de", "www.example.com"
   ))
   expect_identical(host("sub0"), c(
-    "www.b\u00fccher.de", "b\u00fccher.de", "www.xn--bcher-kva.de",
-    "b\u00fccher.de", "www.example.com"
+    "www.xn--bcher-kva.de", "xn--bcher-kva.de", "www.xn--bcher-kva.de",
+    "xn--bcher-kva.de", "www.example.com"
   ))
   expect_identical(host("sub1"), c(
-    "www.b\u00fccher.de", "b\u00fccher.de", "www.xn--bcher-kva.de",
-    "b.b\u00fccher.de", "www.example.com"
+    "www.xn--bcher-kva.de", "xn--bcher-kva.de", "www.xn--bcher-kva.de",
+    "b.xn--bcher-kva.de", "www.example.com"
   ))
   expect_identical(
     policy_parse(urls, "whatwg", "strip")$domain,
-    c("b\u00fccher.de", "b\u00fccher.de", "xn--bcher-kva.de",
-      "b\u00fccher.de", "example.com")
+    c("xn--bcher-kva.de", "xn--bcher-kva.de", "xn--bcher-kva.de",
+      "xn--bcher-kva.de", "example.com")
   )
 })
 
@@ -211,17 +212,19 @@ test_that("whatwg: a mixed ACE host trims to the spelling of its domain", {
                    c(NA_character_, NA_character_))
 })
 
-test_that("whatwg: pure ACE and pure Unicode hosts keep their spelling", {
+test_that("whatwg: ACE and Unicode hosts give the parsed ASCII host", {
+  # The default "keep" returns the host as parsed, its ASCII form, whichever
+  # spelling the input used (RUL-034).
   urls <- c("http://www.xn--bcher-kva.de/", "http://a.b.xn--bcher-kva.de/",
             "http://www.b\u00fccher.de/", "http://a.b.b\u00fccher.de/")
   for (posture in c("whatwg", "whatwg-profile")) {
     expect_identical(policy_parse(urls, posture, "sub0")$host, c(
-      "www.xn--bcher-kva.de", "xn--bcher-kva.de", "www.b\u00fccher.de",
-      "b\u00fccher.de"
+      "www.xn--bcher-kva.de", "xn--bcher-kva.de", "www.xn--bcher-kva.de",
+      "xn--bcher-kva.de"
     ), label = posture)
     expect_identical(policy_parse(urls, posture, "strip")$host, c(
-      "xn--bcher-kva.de", "a.b.xn--bcher-kva.de", "b\u00fccher.de",
-      "a.b.b\u00fccher.de"
+      "xn--bcher-kva.de", "a.b.xn--bcher-kva.de", "xn--bcher-kva.de",
+      "a.b.xn--bcher-kva.de"
     ), label = posture)
   }
 })

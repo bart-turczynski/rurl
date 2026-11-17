@@ -134,8 +134,9 @@ test_that("rfc3986: a slash run other than two after a web scheme", {
   }
   expect_row("http:////h/p", "rfc3986",
              row("http", path = "//h/p", parse_status = "ok"))
+  # The whatwg host is the ASCII host the host parser records (RUL-034).
   expect_row("http:///h\u00e9/p", "whatwg",
-             row("http", host = "h\u00e9", path = "/p",
+             row("http", host = "xn--h-bga", path = "/p",
                  parse_status = "warning-no-tld"))
 })
 

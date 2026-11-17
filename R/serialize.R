@@ -221,8 +221,8 @@
 # none is a cleaning or presentation step:
 #
 #   * host -- WHATWG's host parser emits the ASCII (punycode) domain, lower-
-#     cased, so `host_encoding = "idna"` is the standard's own rendering, not
-#     the `clean_url` default (`keep`, which leaves the Unicode spelling).
+#     cased, so `host_encoding = "idna"` is the standard's own rendering; under
+#     `whatwg` the `clean_url` default (`keep`) gives the same host (RUL-034).
 #     Applied only to hosts D2 makes transform-eligible: an opaque general host
 #     is not a domain and is never routed through domain.R (ADR 0002).
 #   * path -- WHATWG's parser resolves dot segments during parsing. RFC keeps

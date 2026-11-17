@@ -2958,7 +2958,8 @@
 # this phase only selects the eligible rows and applies the scalar fallback
 # rule (keep the pre-encode host when the encode returns NA, or when the decode
 # returns NA / ""). Under `whatwg` the default ("keep") presentation is NOT a
-# no-op: it renders the UTS-46-mapped host (RUL-002; see
+# no-op: it returns the host as the WHATWG host parser records it, the
+# UTS-46-mapped ASCII form (RUL-002, RUL-034; see
 # .whatwg_host_presentation_vec()).
 .apply_host_encoding_vec <- function(final_host, host_encoding, is_ip_host,
                                      url_standard = "whatwg") {
@@ -3005,17 +3006,16 @@
   host_for_clean
 }
 
-# WHATWG host presentation (RUL-002). The WHATWG host parser runs UTS-46
-# "domain to ASCII" (Transitional_Processing false, CheckHyphens false,
+# WHATWG host presentation (RUL-002, RUL-034). The WHATWG host parser runs
+# UTS-46 "domain to ASCII" (Transitional_Processing false, CheckHyphens false,
 # UseSTD3ASCIIRules false, VerifyDnsLength false) and the URL record stores that
 # ASCII host; "domain to Unicode" is UTS-46 ToUnicode of it (UTS #46 section 4,
 # 4.2, 4.3). So under `whatwg` every spelling is a rendering of ONE mapped form:
 #   idna    -> ToASCII(host)
-#   unicode -> ToUnicode(ToASCII(host))
-#   keep    -> ToUnicode(ToASCII(host)) for a host written in Unicode, and
-#              ToASCII(host) for a host already carrying an ACE (`xn--`) label,
-#              mirroring how Stage B picks the `domain`/`tld` spelling for
-#              "keep" (`host_is_ace`, R/parse.R) so host and domain agree.
+#   keep    -> ToASCII(host): the host as parsed, whatever spelling the input
+#              used (RUL-034, superseding RUL-002's keep clause); Stage B picks
+#              the ASCII `domain`/`tld` for it too, so host and domain agree.
+#   unicode -> ToUnicode(ToASCII(host)), the display form (ADR 0020 D5).
 # The mapped form is computed once via `punycoder::host_normalize()`
 # (`.whatwg_domain_to_ascii()`) -- the call the `idna` branch already made,
 # never the ADR 0002 helpers, which stay the reversible (unmapped) renderers of
@@ -3029,7 +3029,7 @@
   }
   keep_orig <- is.na(mapped)
   mapped[keep_orig] <- subset[keep_orig]
-  if (host_encoding == "idna") {
+  if (host_encoding == "idna" || host_encoding == "keep") {
     return(mapped)
   }
   # Only an ACE label decodes to anything other than itself; skip the
@@ -3042,11 +3042,6 @@
     dec[keep_mapped] <- mapped[ace_mapped][keep_mapped]
     decoded[ace_mapped] <- dec
   }
-  if (host_encoding == "unicode") {
-    return(decoded)
-  }
-  ace_source <- .host_is_ace_vec(subset)
-  decoded[ace_source] <- mapped[ace_source]
   decoded
 }
 

@@ -428,11 +428,13 @@ test_that("the per-host helpers do not recheck their constant patterns", {
 
 test_that("no other migrated pattern dropped a non-ASCII fold", {
   # ICU's caseless match folds nothing else onto "e", "w", "index" or
-  # "default", so these rows read as they did.
+  # "default", so these rows read as they did. Under the default whatwg the
+  # policy reads the ASCII host the host parser records (RUL-034), whose first
+  # label is not `www` either.
   expect_identical(
     rurl:::.apply_www_policy_vec(c("\u1e98ww.a.com", "WwW.a.com"), "strip",
                                  c(FALSE, FALSE)),
-    c("\u1e98ww.a.com", "a.com")
+    c("xn--ww-m4s.a.com", "a.com")
   )
   np <- function(x) {
     rurl:::.normalize_path_vec(x, "keep", "none", "strip", "none")

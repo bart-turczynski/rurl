@@ -37,10 +37,14 @@ test_that("whatwg maps U+FF61 in an IPv4 host and coerces to dotted-quad", {
 })
 
 test_that("whatwg maps the separator in an IDN name host", {
-  # The reversible Unicode host is kept (ADR 0002); only the separator is
-  # normalized to ASCII ".".
+  # The separator maps to ASCII "." in the ASCII host the host parser
+  # records, which the default host_encoding = "keep" returns (RUL-034); the
+  # "unicode" display form keeps the U-label with the mapped separator.
   u <- paste0("https://例え", U3002, "jp/path")
-  expect_identical(get_host(u, url_standard = "whatwg"), "例え.jp")
+  expect_identical(get_host(u, url_standard = "whatwg"), "xn--r8jz45g.jp")
+  expect_identical(
+    get_host(u, url_standard = "whatwg", host_encoding = "unicode"), "例え.jp"
+  )
 })
 
 # --- host-only scope: path/query/fragment must NOT be mapped -----------------

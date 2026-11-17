@@ -116,8 +116,10 @@ test_that("multi-subdomain IDN: A-label and Unicode are structural twins", {
 })
 
 # ---------------------------------------------------------------------------
-# host_encoding = "keep" must preserve the INPUT spelling in the OUTPUT while
-# still applying the structural trim. (Constraint #2.)
+# host_encoding = "keep" returns the host as parsed while still applying the
+# structural trim. (Constraint #2.) Under the default whatwg that is the ASCII
+# host the host parser records, whichever spelling the input used (RUL-034);
+# rfc3986 rejects a raw Unicode host (RUL-030).
 # ---------------------------------------------------------------------------
 
 test_that("keep encoding preserves A-label spelling under subdomain trim", {
@@ -130,17 +132,17 @@ test_that("keep encoding preserves A-label spelling under subdomain trim", {
   )
 })
 
-test_that("keep encoding preserves Unicode spelling under subdomain trim", {
+test_that("keep encoding gives the parsed ASCII host under subdomain trim", {
   expect_equal(
     parse_host(
       deep_unicode,
       subdomain_levels_to_keep = 1, host_encoding = "keep"
     ),
-    "b.münich.com"
+    "b.xn--mnich-kva.com"
   )
 })
 
-test_that("keep encoding preserves spelling under www if_no_subdomain", {
+test_that("keep gives the parsed ASCII host under www if_no_subdomain", {
   expect_equal(
     parse_host(
       apex_alabel,
@@ -153,7 +155,7 @@ test_that("keep encoding preserves spelling under www if_no_subdomain", {
       apex_unicode,
       www_handling = "if_no_subdomain", host_encoding = "keep"
     ),
-    "www.münich.com"
+    "www.xn--mnich-kva.com"
   )
 })
 

@@ -259,7 +259,9 @@ checks that — see [Gates on this file](#gates-on-this-file) below.
   `pslr::suffix_extract()`, used for STRUCTURAL policy decisions (www-prefix,
   subdomain-trim) on one canonical spelling.
 - `.host_is_ace()` (R/domain.R) — TRUE if any host label is an `xn--` A-label;
-  drives the `host_encoding = "keep"` spelling choice.
+  drives the `rfc3986` `host_encoding = "keep"` spelling choice. Under
+  `whatwg`, `"keep"` is the ASCII host the host parser records, as `"idna"`
+  (RUL-034).
 - `.apply_host_standard_model_vec()` (R/parse-phases.R) — the `url_standard`
   host IPv4/reg-name model. Stage-A-affecting (`url_standard` enters the parse
   cache key). See ADR 0007; [ADR 0020](design/adr/0020-literal-execution-of-the-standards.md)
@@ -279,7 +281,8 @@ ADR 0001). `rurl` calls `pslr` with a fixed contract:
   output; pslr defaults to ASCII A-labels). Structural/decision callers keep
   this default; the emitted domain/TLD path (`.derive_domain_tld()`) instead
   selects the spelling from `host_encoding`, so
-  `get_domain()`/`get_tld()`/`get_subdomain()` mirror `get_host()`.
+  `get_domain()`/`get_tld()`/`get_subdomain()` mirror `get_host()` (ASCII
+  under the default `whatwg` `"keep"`, RUL-034).
 - `unknown = "na"` so an unknown TLD yields `NA` rather than pslr's implicit
   `*`.
 - pslr is queried on the **annotation candidate**, never on the identity host
