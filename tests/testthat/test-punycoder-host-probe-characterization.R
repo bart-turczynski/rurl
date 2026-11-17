@@ -367,19 +367,32 @@ test_that("isolated check_hyphens covers leading/trailing/position-3-4 rules", {
 # relaxed flags (UTS #46 section 4.2 step 4) and, per its contract, increments
 # the profile revision to `-v3` for it (ADR-018). A 1.3.0.9000 build from
 # before that change still reports `-v2`. The token must agree with the
-# behavior: `-v3` exactly when the all-relaxed call keeps empty labels, so a
-# release that changes the behavior without the bump fails here.
+# behavior: `-v3` or later exactly when the all-relaxed call keeps empty
+# labels, so a release that changes the behavior without the bump fails here.
+# Development punycoder after PUNY-nqbqcgow also keeps non-LDH ASCII in an
+# `xn--` basic part under `use_std3 = FALSE` and bumps the profile to `-v4`,
+# which is `-v3` plus that behavior. The witness below is checked first, so the
+# token must agree with it too: a `-v4` build returns the witness unchanged,
+# while the 1.3.0.9000 build on the default library (`-v3`) returns NA for it
+# (measured 2026-11-17).
 
 test_that("the Unicode pin rurl inherits from punycoder is the recorded one", {
   info <- punycoder::normalization_profile_info()
   expect_s3_class(info, "data.frame")
   expect_identical(nrow(info), 1L)
   version <- utils::packageVersion("punycoder")
+  witness <- "xn--88e732c.xn--1-?-pzc"
+  kept_witness <- identical(punycoder::host_normalize(
+    witness, check_hyphens = FALSE, use_std3 = FALSE,
+    verify_dns_length = FALSE
+  ), witness)
   keeps <- !is.na(punycoder::host_normalize(
     "a..com", check_hyphens = FALSE, use_std3 = FALSE,
     verify_dns_length = FALSE
   ))
-  expected <- if (keeps) {
+  expected <- if (kept_witness) {
+    list(unicode_version = "17.0.0", profile = "uts46-nontransitional-std3-v4")
+  } else if (keeps) {
     list(unicode_version = "17.0.0", profile = "uts46-nontransitional-std3-v3")
   } else if (version >= "1.2.1.9000") {
     list(unicode_version = "17.0.0", profile = "uts46-nontransitional-std3-v2")
