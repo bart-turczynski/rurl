@@ -80,13 +80,18 @@ test_that("decode keeps NUL, CRLF, percent and non-UTF-8 triplets as written", {
   )
 })
 
-test_that("decode leaves malformed and empty queries as they are", {
+test_that("decode leaves malformed queries as they are", {
   expect_identical(
     get_query("http://h/?a=%zz", url_standard = "whatwg"), "a=%zz"
   )
   expect_identical(
     get_query("http://h/?a=50%", url_standard = "whatwg"), "a=50%"
   )
-  expect_identical(get_query("http://h/?"), "")
+})
+
+test_that("an absent or empty query stays NA, as before", {
+  # Unchanged by the decode rule: main reads `?` alone as no query.
   expect_true(is.na(get_query("http://h/nopath")))
+  expect_true(is.na(get_query("http://h/?")))
+  expect_true(is.na(get_query(NA_character_)))
 })
