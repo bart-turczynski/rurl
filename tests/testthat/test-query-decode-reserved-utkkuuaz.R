@@ -95,3 +95,55 @@ test_that("an absent or empty query stays NA, as before", {
   expect_true(is.na(get_query("http://h/?")))
   expect_true(is.na(get_query(NA_character_)))
 })
+
+test_that("an opaque token renders like any other on every path", {
+  # %00 and a malformed % are opaque to the matcher, but the readable rule
+  # decodes %41 and leaves them as written on the default and sort paths.
+  expect_identical(get_query("http://h/?a=%00%41&b=1"), "a=%00A&b=1")
+  expect_identical(
+    get_query("http://h/?a=%00%41&b=1", sort_params = TRUE), "a=%00A&b=1"
+  )
+  expect_identical(get_query("http://h/?a=%zz%41"), "a=%zzA")
+  expect_identical(
+    get_query("http://h/?a=%zz%41", sort_params = TRUE), "a=%zzA"
+  )
+})
+
+test_that("the string form keeps every ASCII triplet outside unreserved", {
+  expect_identical(
+    get_query("http://h/?a=%20%22%27%7C%7F%0D%0A%00"),
+    "a=%20%22%27%7C%7F%0D%0A%00"
+  )
+  # Non-ASCII UTF-8 still decodes, U+2028 among it.
+  expect_identical(get_query("http://h/?a=%E2%80%A8"), "a= ")
+})
+
+test_that("format = 'list' still decodes every triplet but %00", {
+  expect_identical(
+    get_query("http://h/?a=%0D%0A", format = "list")[[1]], list(a = "\r\n")
+  )
+  expect_identical(
+    get_query("http://h/?a=%00", format = "list")[[1]], list(a = "%00")
+  )
+  expect_identical(
+    get_query("http://h/?a=1%262", format = "list")[[1]], list(a = "1&2")
+  )
+})
+
+test_that("decode_plus turns '+' into a space and keeps %20", {
+  expect_identical(
+    get_query("http://h/?a=x+y%20z", query_handling = "filter",
+              decode_plus = TRUE),
+    "a=x y%20z"
+  )
+})
+
+test_that("a literal apostrophe shows the standard's spelling", {
+  # whatwg encodes ' in an http query; rfc3986 keeps the sub-delimiter raw.
+  expect_identical(
+    get_query("http://h/?a=it's", url_standard = "whatwg"), "a=it%27s"
+  )
+  expect_identical(
+    get_query("http://h/?a=it's", url_standard = "rfc3986"), "a=it's"
+  )
+})
