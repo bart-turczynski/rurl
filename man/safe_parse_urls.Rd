@@ -410,7 +410,9 @@ input starting with a single \code{/} read as a local \verb{file:} path; not
 Chrome-faithful); \code{"whatwg"} is the absolute-URL no-base posture that
 \emph{rejects} scheme-less input (unlike a bare \code{url_standard = "whatwg"});
 \code{"rfc-syntax"} is RFC 3986 generic syntax as parsing, not normalization
-(case and dot-segments are preserved); \code{"seo"}/\code{"canonical"} is rurl's
+(case and dot-segments are preserved; an explicit \code{url_standard} other
+than its own \code{"rfc3986"} drops these case and path exceptions);
+\code{"seo"}/\code{"canonical"} is rurl's
 origin-cleaning intent — a \strong{lossy policy projection of a WHATWG-parsed
 URL} (ADR 0017), which claims no resource equivalence:
 \code{url_standard = "whatwg"} underneath (which also resolves \code{.}/\code{..} folder

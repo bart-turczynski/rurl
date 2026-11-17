@@ -70,7 +70,11 @@
 #' @param ... Optional explicit knob overrides (e.g. \code{scheme_policy =
 #'   "require"}), named as in \code{\link{safe_parse_url}}. Each override that
 #'   the profile also sets replaces the profile's value and marks the result
-#'   \code{customized}.
+#'   \code{customized}. A \code{url_standard} other than the bundle's own also
+#'   drops the bundle's case and path exceptions (\code{path_normalization},
+#'   \code{case_handling}, \code{path_identity}) that you did not pass, since
+#'   they hold under its own standard only; a governed knob you pass by name
+#'   is kept.
 #' @return A named list of the resolved knob \eqn{\rightarrow} value pairs the
 #'   profile sets (the same shape as an internal profile bundle), plus a
 #'   trailing logical \code{customized} element.
