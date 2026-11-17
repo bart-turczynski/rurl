@@ -40,8 +40,16 @@ test_that("pin: rfc3986 reads a respelled base as written", {
 })
 
 test_that("pin: a base the parser only re-encodes keeps its spelling", {
+  # The path keeps its spelling; the host is the ASCII host the host parser
+  # records under the default host_encoding = "keep" (RUL-034), and
+  # "unicode" renders it as written.
   expect_identical(
     resolve_url("g", "http://bücher.de/ä/b", url_standard = "whatwg"),
+    "http://xn--bcher-kva.de/ä/g"
+  )
+  expect_identical(
+    resolve_url("g", "http://bücher.de/ä/b", url_standard = "whatwg",
+                host_encoding = "unicode"),
     "http://bücher.de/ä/g"
   )
   expect_identical(

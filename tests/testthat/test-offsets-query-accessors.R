@@ -48,33 +48,37 @@ for (loc in names(ctypes)) {
       bad <- u8(c("http://a.ex\xe9.co.uk/", "http://\xe9.example.com/"))
       # Rows 7-10: the default whatwg host parser maps the leading U+FEFF and
       # U+200B to nothing (UTS-46) before the trim; the mark-led cuts are
-      # pinned on the helper below.
-      want_keep <- list(
+      # pinned on the helper below. The multibyte cuts are read under
+      # "unicode": whatwg "keep" is the ASCII host the host parser records,
+      # which equals "idna" (RUL-034).
+      want_uni <- list(
         character(0), character(0), c("\u00fc", "\u00fc"), "a", c("x", "y"),
         "\u00e9", "a", "a", "\u00fc", "\u00fc", "a", c("www", "sub"),
         character(0),
         character(0),
         character(0), character(0), character(0)
       )
-      got <- get_subdomain(url, format = "labels")
-      expect_identical(got, want_keep)
-      expect_identical(get_subdomain(url, format = "labels",
-                                     host_encoding = "unicode"), want_keep)
+      got <- get_subdomain(url, format = "labels", host_encoding = "unicode")
+      expect_identical(got, want_uni)
       expect_identical(Encoding(got[[3]]), c("UTF-8", "UTF-8"))
+      want_ascii <- list(character(0), character(0), c("xn--tda", "xn--tda"),
+                         "a", c("x", "y"), "xn--9ca", "a", "a", "xn--tda",
+                         "xn--tda", "a", c("www", "sub"), character(0),
+                         character(0), character(0), character(0),
+                         character(0))
       expect_identical(
         get_subdomain(url, format = "labels", host_encoding = "idna"),
-        list(character(0), character(0), c("xn--tda", "xn--tda"), "a",
-             c("x", "y"), "xn--9ca", "a", "a", "xn--tda", "xn--tda", "a",
-             c("www", "sub"), character(0),
-             character(0), character(0), character(0), character(0))
+        want_ascii
       )
+      expect_identical(get_subdomain(url, format = "labels"), want_ascii)
       expect_identical(
-        get_subdomain(url, include_www = TRUE),
+        get_subdomain(url, include_www = TRUE, host_encoding = "unicode"),
         c(NA, "www", "\u00fc.\u00fc", "a", "x.y", "\u00e9", "a", "a",
           "\u00fc", "\u00fc", "a", "www.sub", NA, NA, NA, NA, NA)
       )
       expect_identical(
-        get_subdomain(url, url_standard = "whatwg")[c(1:6, 11:17)],
+        get_subdomain(url, url_standard = "whatwg",
+                      host_encoding = "unicode")[c(1:6, 11:17)],
         c(NA, NA, "\u00fc.\u00fc", "a", "x.y", "\u00e9", "a", "www.sub",
           NA, NA, NA, NA, NA)
       )

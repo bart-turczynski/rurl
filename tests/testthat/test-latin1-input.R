@@ -53,10 +53,12 @@ expect_bytes <- function(actual, expected, label) {
 
 # The UTF-8 twin's value under each arm. `scheme_acceptance = "general"` is an
 # error under url_standard = NULL.
+# The whatwg host is the ASCII host the host parser records (`h\u00fc.com` is
+# `xn--h-eha.com`) under the default host_encoding = "keep" (RUL-034).
 twin <- list(
   "NULL web" = list(
     args = list(url_standard = NULL),
-    host = c("h", "h", "h\u00fc.com", NA),
+    host = c("h", "h", "xn--h-eha.com", NA),
     path = c("/", "/\u00fc", "/", NA),
     query = c("%C3%BC", "q=%C3%BC", NA, NA),
     fragment = c(NA, "%C3%BC", NA, NA),
@@ -85,7 +87,7 @@ twin <- list(
   ),
   "whatwg web" = list(
     args = list(url_standard = "whatwg"),
-    host = c("h", "h", "h\u00fc.com", NA),
+    host = c("h", "h", "xn--h-eha.com", NA),
     path = c("/", "/\u00fc", "/", NA),
     query = c("%C3%BC", "q=%C3%BC", NA, NA),
     fragment = c(NA, "%C3%BC", NA, NA),
@@ -93,7 +95,7 @@ twin <- list(
   ),
   "whatwg general" = list(
     args = list(url_standard = "whatwg", scheme_acceptance = "general"),
-    host = c("h", "h", "h\u00fc.com", "h"),
+    host = c("h", "h", "xn--h-eha.com", "h"),
     path = c("/", "/\u00fc", "/", "/\u00fc"),
     query = c("%C3%BC", "q=%C3%BC", NA, "%C3%BC"),
     fragment = c(NA, "%C3%BC", NA, NA),
@@ -248,7 +250,7 @@ test_that("the accessors and serializers follow the parse", {
   # through safe_parse_urls(), so each needs the same entry conversion.
   rurl_clear_caches()
   on.exit(rurl_clear_caches(), add = TRUE)
-  expect_bytes(get_host(latin1_urls[3]), "h\u00fc.com", "get_host")
+  expect_bytes(get_host(latin1_urls[3]), "xn--h-eha.com", "get_host")
   for (std in c("whatwg", "rfc3986")) {
     for (form in c("source", "normalized")) {
       expect_bytes(serialize_url(latin1_urls, standard = std, form = form),

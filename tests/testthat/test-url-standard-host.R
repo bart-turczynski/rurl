@@ -92,11 +92,12 @@ test_that("WHATWG host presentation applies UTS-46 ignored mappings", {
 # ToASCII with Transitional_Processing false (CheckHyphens, UseSTD3ASCIIRules
 # and VerifyDnsLength false), and the URL record stores that ASCII host;
 # "domain to Unicode" is UTS-46 ToUnicode of it (UTS #46 section 4 Processing,
-# 4.2 ToASCII, 4.3 ToUnicode). Under `url_standard = "whatwg"` the default host
-# presentation and `host_encoding = "unicode"` therefore both render
-# ToUnicode(ToASCII(host)): the mapping is the host parser's, not the `idna`
-# dial's. The `rfc3986` arm rejects these raw non-ASCII hosts (RUL-030); the
-# default (and NULL) is whatwg (ADR 0020).
+# 4.2 ToASCII, 4.3 ToUnicode). Under `url_standard = "whatwg"`
+# `host_encoding = "unicode"` therefore renders ToUnicode(ToASCII(host)), and
+# the default ("keep") returns ToASCII(host), the host as parsed (RUL-034,
+# superseding RUL-002's keep clause): the mapping is the host parser's, not
+# the `idna` dial's. The `rfc3986` arm rejects these raw non-ASCII hosts
+# (RUL-030); the default (and NULL) is whatwg (ADR 0020).
 test_that("WHATWG default and unicode presentations map the host", {
   # Two plain vectors, not one named vector: a `c(name = value)` tag is a
   # symbol, and under `LC_ALL=C` a non-ASCII symbol cannot be represented, so
@@ -108,8 +109,9 @@ test_that("WHATWG default and unicode presentations map the host", {
     "https://\uff45xample.com/p"     # fullwidth e
   )
   mapped <- c("b\u00fccher.example", "file.com", "ab.com", "example.com")
+  ascii <- c("xn--bcher-kva.example", "file.com", "ab.com", "example.com")
 
-  expect_identical(get_host(urls, url_standard = "whatwg"), mapped)
+  expect_identical(get_host(urls, url_standard = "whatwg"), ascii)
   expect_identical(
     get_host(urls, url_standard = "whatwg", host_encoding = "unicode"), mapped
   )
@@ -118,7 +120,7 @@ test_that("WHATWG default and unicode presentations map the host", {
     paste0("https://", mapped, "/p")
   )
   expect_identical(
-    safe_parse_urls(urls, profile = "whatwg")$host, mapped
+    safe_parse_urls(urls, profile = "whatwg")$host, ascii
   )
 
   # unicode(source) == unicode(idna(source)): the Unicode presentation of the
@@ -171,9 +173,8 @@ test_that("WHATWG default and unicode presentations map the host", {
 })
 
 test_that("WHATWG default presentation keeps an ACE spelling as ACE", {
-  # "keep" preserves the spelling FAMILY the input used, as the Stage-B
-  # `domain`/`tld` selection does for an ACE host; `unicode` decodes it and
-  # `idna` returns the mapped ASCII form. All three agree on the record.
+  # "keep" and `idna` return the mapped ASCII form, the host as parsed
+  # (RUL-034); `unicode` decodes it. All three agree on the record.
   u <- "https://xn--bcher-kva.example/p"
   expect_identical(get_host(u, url_standard = "whatwg"),
     "xn--bcher-kva.example")

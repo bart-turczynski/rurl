@@ -16,7 +16,10 @@
 # UTF-8 LC_CTYPE. `status` and `clean` are readable; `md5` covers every other
 # column (helper-input-boundary.R, ib_canon()). Measured on 6623cab. ADR 0020
 # retired the frozen NULL profile: `NULL` reads as "whatwg", so null_web
-# carries the whatwg_web pins (RURL-mbhuhwzk).
+# carries the whatwg_web pins (RURL-mbhuhwzk). The whatwg host rows moved to
+# the A-label, and both whatwg digests with them, when the default
+# host_encoding = "keep" became the ASCII host the WHATWG host parser records
+# (RUL-034, RURL-ofortppo).
 #
 # Row order: ascii, utf8, utf8_host, native, native_host, latin1, latin1_host,
 # bytes, bytes_host, invalid, invalid_query, invalid_host, invalid_marked,
@@ -29,13 +32,13 @@ ib_seam_pins <- list(
     ),
     clean = c(
       "http://h.example.com/p", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", NA, NA,
+      "http://xn--bcher-kva.example.com/", "http://h.example.com/p\u00fc",
+      "http://xn--bcher-kva.example.com/", "http://h.example.com/p\u00fc",
+      "http://xn--bcher-kva.example.com/", NA, NA,
       "http://h.example.com/caf\ufffd", "http://h.example.com/p", NA,
       "http://h.example.com/p\ufffd", NA, NA, NA
     ),
-    md5 = "8c54485243e4822496d04d879c4fa146"
+    md5 = "7a81ee051b8cbe5ebf89fe5585cfb2a9"
   ),
   # rfc3986, both routes: every row but the ASCII one carries a non-ASCII
   # code point (raw, latin1, native or undecodable), and RFC 3986 admits
@@ -54,13 +57,13 @@ ib_seam_pins <- list(
     ),
     clean = c(
       "http://h.example.com/p", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", "http://h.example.com/p\u00fc",
-      "http://b\u00fccher.example.com/", NA, NA,
+      "http://xn--bcher-kva.example.com/", "http://h.example.com/p\u00fc",
+      "http://xn--bcher-kva.example.com/", "http://h.example.com/p\u00fc",
+      "http://xn--bcher-kva.example.com/", NA, NA,
       "http://h.example.com/caf\ufffd", "http://h.example.com/p", NA,
       "http://h.example.com/p\ufffd", "mailto:a%C3%BC@b.example.com", NA, NA
     ),
-    md5 = "363345a7d40d8cbde02dffd362daab2f"
+    md5 = "20bf60f03c31f9b4473cf50795e0e340"
   ),
   rfc3986_general = list(
     status = c("ok", rep("error", 15L)),
@@ -119,15 +122,21 @@ test_that("the parse seams keep their output for every input representation", {
 # `transform-skipped-ineligible-scheme` alone, under both LC_CTYPEs. Both
 # moved again when RURL-xwsyfkwh added `mailto_local_part_raw`; with that
 # column dropped, each still gives its previous digest, under both LC_CTYPEs.
+# The NULL and whatwg digests of the exports that present a host
+# (safe_parse_url(s), get_clean_url, get_host, get_subdomain, check_hosts,
+# resolve_url, canonical_join) moved when the default host_encoding = "keep"
+# became the ASCII host the WHATWG host parser records (RUL-034,
+# RURL-ofortppo); `get_host ... 1` now equals its idna twin `... 2`, and no
+# rfc3986 digest, nor any key or serializer digest, moved.
 ib_export_pins <- c(
-  "safe_parse_urls NULL 1 url" = "fa2e5fefaab3afdc95f71948583d6572",
-  "safe_parse_urls NULL 2 url" = "b59fa78bdb9c20f7bec9f30bb5b5e971",
-  "safe_parse_urls whatwg 1 url" = "fa2e5fefaab3afdc95f71948583d6572",
-  "safe_parse_urls whatwg 2 url" = "b59fa78bdb9c20f7bec9f30bb5b5e971",
+  "safe_parse_urls NULL 1 url" = "0dc973b40d1003e0451be82951c1f5cd",
+  "safe_parse_urls NULL 2 url" = "63f48a002ab3191a63a3c9a0ce135f74",
+  "safe_parse_urls whatwg 1 url" = "0dc973b40d1003e0451be82951c1f5cd",
+  "safe_parse_urls whatwg 2 url" = "63f48a002ab3191a63a3c9a0ce135f74",
   "safe_parse_urls rfc3986 1 url" = "639d33dd3f6c5ddddde9865bf28aedb3",
   "safe_parse_urls rfc3986 2 url" = "39c42a884a867428d299bebd6dcbf388",
-  "safe_parse_url NULL 1 url" = "923c41a7c30d799192efbb9291c06d92",
-  "safe_parse_url whatwg 1 url" = "923c41a7c30d799192efbb9291c06d92",
+  "safe_parse_url NULL 1 url" = "66e48df0c105f2e818b5f3f870e4d6a1",
+  "safe_parse_url whatwg 1 url" = "66e48df0c105f2e818b5f3f870e4d6a1",
   "safe_parse_url rfc3986 1 url" = "3f96613be42b629df6b449399eb52468",
   "get_parse_status NULL 1 url" = "615b3db3d471ae82a316696057e710f6",
   "get_parse_status whatwg 1 url" = "615b3db3d471ae82a316696057e710f6",
@@ -135,26 +144,26 @@ ib_export_pins <- c(
   "get_parse_verdicts NULL 1 url" = "7f907da308060c0378350cb75fe17f5a",
   "get_parse_verdicts whatwg 1 url" = "7f907da308060c0378350cb75fe17f5a",
   "get_parse_verdicts rfc3986 1 url" = "ed7874c3bd1e046c571bc752e899a7f3",
-  "get_clean_url NULL 1 url" = "78aca5f110e8f4d8a9e31c7abe230fdc",
-  "get_clean_url NULL 2 url" = "fa9b768d6716af405b106024ba91a69b",
-  "get_clean_url whatwg 1 url" = "78aca5f110e8f4d8a9e31c7abe230fdc",
-  "get_clean_url whatwg 2 url" = "fa9b768d6716af405b106024ba91a69b",
+  "get_clean_url NULL 1 url" = "2a5e7c2d84b697d3383d97d58de6d306",
+  "get_clean_url NULL 2 url" = "c0a0e2803ec90101acc26466292eb96c",
+  "get_clean_url whatwg 1 url" = "2a5e7c2d84b697d3383d97d58de6d306",
+  "get_clean_url whatwg 2 url" = "c0a0e2803ec90101acc26466292eb96c",
   "get_clean_url rfc3986 1 url" = "0fd7665de5cd1bc123bae03872a8b329",
   "get_clean_url rfc3986 2 url" = "659e7c4507688db9d53b8d8072dd82b7",
   "get_scheme NULL 1 url" = "6845fecfad8dcf680ffb01b92b5e8ae9",
   "get_scheme whatwg 1 url" = "6845fecfad8dcf680ffb01b92b5e8ae9",
   "get_scheme rfc3986 1 url" = "d2a9930f45ea9755ab895384a76f69ff",
-  "get_host NULL 1 url" = "9219457d84db42e35a3e6d6cc1b9cd8b",
+  "get_host NULL 1 url" = "d3e00ff5ff4f210d340e09368b9e8196",
   "get_host NULL 2 url" = "d3e00ff5ff4f210d340e09368b9e8196",
-  "get_host whatwg 1 url" = "9219457d84db42e35a3e6d6cc1b9cd8b",
+  "get_host whatwg 1 url" = "d3e00ff5ff4f210d340e09368b9e8196",
   "get_host whatwg 2 url" = "d3e00ff5ff4f210d340e09368b9e8196",
   "get_host rfc3986 1 url" = "4844d257abdeadabb7b72a207a52cfb8",
   "get_host rfc3986 2 url" = "4844d257abdeadabb7b72a207a52cfb8",
   "get_domain NULL 1 url" = "3b425b13a4ec0ca5b8eca6edbb91bc91",
   "get_domain whatwg 1 url" = "3b425b13a4ec0ca5b8eca6edbb91bc91",
   "get_domain rfc3986 1 url" = "cf50779ac09441570adabb7ded35528e",
-  "get_subdomain NULL 1 url" = "8cad7649483e1de0c80f2734fa5ef21a",
-  "get_subdomain whatwg 1 url" = "8cad7649483e1de0c80f2734fa5ef21a",
+  "get_subdomain NULL 1 url" = "e6d9d747a5aad356711bd0fcd0d69c5d",
+  "get_subdomain whatwg 1 url" = "e6d9d747a5aad356711bd0fcd0d69c5d",
   "get_subdomain rfc3986 1 url" = "26922fd0e744fa8467e75529611df53b",
   "get_tld NULL 1 url" = "996896643d31c94ccbae85bea8be80e7",
   "get_tld whatwg 1 url" = "996896643d31c94ccbae85bea8be80e7",
@@ -195,8 +204,8 @@ ib_export_pins <- c(
   "get_scheme_class NULL 1 url" = "5ac05eb1f13a70f637c439692c74f854",
   "get_scheme_class whatwg 1 url" = "5ac05eb1f13a70f637c439692c74f854",
   "get_scheme_class rfc3986 1 url" = "5c22a78946a1fd3d6682dabf7339dea5",
-  "check_hosts NULL 1 url" = "3737a77f6634499b1b4040449ae0e672",
-  "check_hosts whatwg 1 url" = "3737a77f6634499b1b4040449ae0e672",
+  "check_hosts NULL 1 url" = "bc417a15c826403bc0fb85fe506fb42c",
+  "check_hosts whatwg 1 url" = "bc417a15c826403bc0fb85fe506fb42c",
   "check_hosts rfc3986 1 url" = "e14c54863437d3e37af9f6b5593868cb",
   "is_valid_host NULL 1 url" = "9afb18471bac9a899b04fae50954c705",
   "is_valid_host whatwg 1 url" = "9afb18471bac9a899b04fae50954c705",
@@ -218,14 +227,14 @@ ib_export_pins <- c(
   "get_url_key rfc3986 1 url" = "45a9a90a2d9908c298236048ad1c4e3c",
   "query_param_summary none 1 urls" = "07833a06dd1855a5a5497ca218720135",
   "resolve_url NULL 1 relative_or_absolute" =
-    "a933a97453ba4c17ee0425f8a06d68c4",
-  "resolve_url NULL 1 base_url" = "bfe4b31f6c0ade011d498929d7a3b1b8",
+    "a965ed18bc2ec85e8ce62e868b5baee1",
+  "resolve_url NULL 1 base_url" = "54b866598ba78d36c6c4215a411f3adf",
   "resolve_url NULL 2 relative_or_absolute" =
     "4066e92c245f802e7bf7122aad4202e7",
   "resolve_url NULL 2 base_url" = "7d3f7d59cea2e3e9916e8fe57ecaba06",
   "resolve_url whatwg 1 relative_or_absolute" =
-    "a933a97453ba4c17ee0425f8a06d68c4",
-  "resolve_url whatwg 1 base_url" = "bfe4b31f6c0ade011d498929d7a3b1b8",
+    "a965ed18bc2ec85e8ce62e868b5baee1",
+  "resolve_url whatwg 1 base_url" = "54b866598ba78d36c6c4215a411f3adf",
   "resolve_url whatwg 2 relative_or_absolute" =
     "4066e92c245f802e7bf7122aad4202e7",
   "resolve_url whatwg 2 base_url" = "7d3f7d59cea2e3e9916e8fe57ecaba06",
@@ -259,10 +268,10 @@ ib_export_pins <- c(
   "url_anti_join whatwg 1 y" = "f01da519a9c3d6cd75c6a2eae0ecd3c4",
   "url_anti_join rfc3986 1 x" = "c9296c72c388029da13f288c75a6c3c0",
   "url_anti_join rfc3986 1 y" = "f01da519a9c3d6cd75c6a2eae0ecd3c4",
-  "canonical_join NULL 1 data_A" = "62a8cfeb38fb4dc472c1e7dd50f26b24",
-  "canonical_join NULL 1 data_B" = "71214177ffe152c9f5c575e7c6e888c1",
-  "canonical_join whatwg 1 data_A" = "62a8cfeb38fb4dc472c1e7dd50f26b24",
-  "canonical_join whatwg 1 data_B" = "71214177ffe152c9f5c575e7c6e888c1",
+  "canonical_join NULL 1 data_A" = "d5d46671323331a0060a6d662b06a69a",
+  "canonical_join NULL 1 data_B" = "504b470177bfd3f6b9be86d0dac40d03",
+  "canonical_join whatwg 1 data_A" = "d5d46671323331a0060a6d662b06a69a",
+  "canonical_join whatwg 1 data_B" = "504b470177bfd3f6b9be86d0dac40d03",
   "canonical_join rfc3986 1 data_A" = "e49e3a5c378370731a667f2a441658c1",
   "canonical_join rfc3986 1 data_B" = "c0a0eed797015dbbe207a77c06564546"
 )

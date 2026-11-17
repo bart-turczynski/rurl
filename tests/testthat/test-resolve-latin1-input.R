@@ -75,9 +75,11 @@ latin1_bases <- c(
 
 # The UTF-8 twin's value on every arm. `query_handling = "keep"` so the clean
 # surface shows the query row; output = "serialized" needs a named standard.
+# The clean host is the ASCII host the WHATWG host parser records under the
+# default host_encoding = "keep" (RUL-034).
 clean_twin <- c(
   "http://h.com/\u009f", "http://b.com/h\u00fc.com/p",
-  "http://b.com/a?q=%C3%BC", "http://b\u00fc.com/\u009f/p"
+  "http://b.com/a?q=%C3%BC", "http://xn--b-eha.com/\u009f/p"
 )
 arms <- list(
   "default clean" = list(

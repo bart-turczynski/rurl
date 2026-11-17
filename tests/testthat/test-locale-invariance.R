@@ -31,7 +31,10 @@ idn_url <- "http://\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444/\u043f"
 ascii_url <- "http://example.com/p"
 
 # Components that can carry non-ASCII, and the ones that are ASCII by
-# construction (percent-encoded or a fixed vocabulary).
+# construction (percent-encoded or a fixed vocabulary). The host, domain and
+# tld carry non-ASCII under host_encoding = "unicode"; the default "keep" is
+# the ASCII host the WHATWG host parser records (RUL-034), so the tests that
+# need them non-ASCII ask for "unicode".
 utf8_components <- c(
   "original_url", "host", "path", "domain", "tld", "domain_unicode",
   "tld_unicode", "clean_url"
@@ -42,7 +45,7 @@ ascii_components <- c("scheme", "domain_ascii", "tld_ascii", "parse_status")
 # --- 1. Encoding() marks on the scalar parser --------------------------------
 
 test_that("an IDN URL's non-ASCII components are declared UTF-8", {
-  res <- safe_parse_url(idn_url)
+  res <- safe_parse_url(idn_url, host_encoding = "unicode")
   for (nm in utf8_components) {
     expect_identical(Encoding(res[[nm]]), "UTF-8", label = nm)
   }
@@ -72,7 +75,7 @@ test_that("ASCII-by-construction components are correctly unmarked", {
 test_that("safe_parse_urls() marks columns the same as safe_parse_url()", {
   # The Stage-B assembly chokepoint (c6a0457) is a different code path from the
   # scalar one; both must land on the same contract.
-  df <- safe_parse_urls(c(idn_url, ascii_url))
+  df <- safe_parse_urls(c(idn_url, ascii_url), host_encoding = "unicode")
   for (nm in utf8_components) {
     expect_identical(Encoding(df[[nm]][1]), "UTF-8", label = nm)
     expect_identical(Encoding(df[[nm]][2]), "unknown", label = nm)
@@ -83,9 +86,12 @@ test_that("safe_parse_urls() marks columns the same as safe_parse_url()", {
 })
 
 test_that("accessors return UTF-8-marked values for an IDN URL", {
-  expect_identical(Encoding(get_host(idn_url)), "UTF-8")
-  expect_identical(Encoding(get_domain(idn_url)), "UTF-8")
-  expect_identical(Encoding(get_tld(idn_url)), "UTF-8")
+  expect_identical(Encoding(get_host(idn_url, host_encoding = "unicode")),
+                   "UTF-8")
+  expect_identical(Encoding(get_domain(idn_url, host_encoding = "unicode")),
+                   "UTF-8")
+  expect_identical(Encoding(get_tld(idn_url, host_encoding = "unicode")),
+                   "UTF-8")
   expect_identical(Encoding(get_clean_url(idn_url)), "UTF-8")
   # ...and the unmarked-ASCII counterpart, for the same reason as above.
   expect_identical(Encoding(get_host(ascii_url)), "unknown")
@@ -99,7 +105,8 @@ test_that("non-ASCII output is byte-identical to its UTF-8 encoding", {
   # A mark is not enough: a transcoding regression would change the BYTES.
   # These are the literal UTF-8 octets, spelled out rather than eyeballed from
   # a printed string.
-  res <- safe_parse_url("http://m\u00fcnchen.de/\u00e9cole")
+  res <- safe_parse_url("http://m\u00fcnchen.de/\u00e9cole",
+                        host_encoding = "unicode")
 
   expect_identical(
     charToRaw(res$host),
@@ -115,7 +122,7 @@ test_that("non-ASCII output is byte-identical to its UTF-8 encoding", {
   expect_identical(charToRaw(res$domain_unicode), charToRaw(res$host))
 
   # The IDN public suffix, likewise: Cyrillic "rf" is U+0440 U+0444.
-  idn <- safe_parse_url(idn_url)
+  idn <- safe_parse_url(idn_url, host_encoding = "unicode")
   expect_identical(charToRaw(idn$tld), as.raw(c(0xd1, 0x80, 0xd1, 0x84)))
   expect_identical(charToRaw(idn$tld_unicode), charToRaw(idn$tld))
   expect_identical(charToRaw(idn$path), as.raw(c(0x2f, 0xd0, 0xbf)))
@@ -759,7 +766,7 @@ test_that("the selector plays no part on the accessor path", {
   expect_identical(
     fresh$none$domain,
     c("example.com", "example.org", "example.co.uk",
-      "\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444")
+      "xn--e1afmkfd.xn--p1ai")
   )
 })
 

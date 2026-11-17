@@ -66,10 +66,11 @@ test_that("pin: an explicit url_standard wins over the profile's", {
 
 test_that("pin: WPT base-relative rows resolve under the WHATWG recipe", {
   # Resolving then cleaning gives what cleaning the standard's own `href`
-  # gives. The three listed rows differ only in SPELLING: clean_url echoes
+  # gives. The two listed rows differ only in SPELLING: clean_url echoes
   # the resolved string's raw Unicode / ASCII bytes where `href` is
-  # percent- or ACE-encoded (host_encoding = "keep", the path as written),
-  # not in what was resolved.
+  # percent-encoded (the path as written), not in what was resolved. The
+  # host no longer differs: host_encoding = "keep" is the ASCII host the
+  # host parser records (RUL-034), so `xn--6qqa088eba` agrees.
   w <- wpt_rel_rows()
   got <- do.call(resolve_url, c(list(w$input, w$base), whatwg_knobs))
   want <- do.call(safe_parse_urls, c(list(w$href), whatwg_knobs))$clean_url
@@ -78,7 +79,6 @@ test_that("pin: WPT base-relative rows resolve under the WHATWG recipe", {
     w$href[differs],
     c(
       "http://www.example.com/%E4%B8%AD/test.txt",
-      "http://xn--6qqa088eba/",
       "http://%60%7B%7D:%60%7B%7D@h/%60%7B%7D?`{}"
     )
   )

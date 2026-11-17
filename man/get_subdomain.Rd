@@ -80,10 +80,12 @@ cleaned URL.}
 }
 Under \code{url_standard = "whatwg"} every value renders the UTS-46-mapped
 host, because mapping is part of WHATWG host parsing rather than a
-feature of the \code{idna} dial (\code{BÜCHER.example} presents as
-\code{bücher.example}; RUL-002). There \code{"keep"} preserves only whether the
-input was written as an A-label (\code{xn--...}), so \code{get_host()} and
-\code{get_domain()} agree on the same row. \code{"rfc3986"} is unaffected.
+feature of the \code{idna} dial (RUL-002). There \code{"keep"} returns the host as
+the WHATWG host parser records it, its ASCII form, so it equals \code{"idna"}
+(\code{BÜCHER.example} and \code{xn--bcher-kva.example} both give
+\code{xn--bcher-kva.example}; RUL-034), and \code{"unicode"} gives
+\code{bücher.example}. \code{get_host()} and \code{get_domain()} agree on the same row.
+\code{"rfc3986"} is unaffected.
 
 \code{"unicode"} is a display form. Under \code{url_standard = "rfc3986"} it can
 present a host that the same standard rejects on re-parse:

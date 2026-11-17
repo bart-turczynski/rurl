@@ -29,8 +29,10 @@
   "http://a%g4b.com/"
 )
 
-.hpl_cafe <- "caf\u00e9.com"
-.hpl_buecher <- "b\u00fcchera.de"
+# The whatwg host is the ASCII host the host parser records (RUL-034):
+# `caf\u00e9.com` and `b\u00fcchera.de` as A-labels.
+.hpl_cafe <- "xn--caf-dma.com"
+.hpl_buecher <- "xn--bchera-3ya.de"
 
 test_that("host percent output is pinned under url_standard = 'whatwg'", {
   host <- c(

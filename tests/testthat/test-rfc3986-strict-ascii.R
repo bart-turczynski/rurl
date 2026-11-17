@@ -95,7 +95,8 @@ test_that("rfc3986: percent-encoded twins and ASCII rows keep their parse", {
 })
 
 test_that("whatwg: raw non-ASCII rows keep their parse on both routes", {
-  hb <- paste0("b", "ü", "cher.de")
+  # The host is the ASCII host the WHATWG host parser records (RUL-034).
+  hb <- "xn--bcher-kva.de"
   web <- list(
     parse_status = c("ok", "ok", "ok", "ok", "ok", "ok", "error", "error"),
     host = c(hb, "h.de", "h.de", "h.de", "h.de", "h.de", NA, NA),

@@ -132,10 +132,12 @@
 #'   }
 #'   Under `url_standard = "whatwg"` every value renders the UTS-46-mapped
 #'   host, because mapping is part of WHATWG host parsing rather than a
-#'   feature of the `idna` dial (`BÜCHER.example` presents as
-#'   `bücher.example`; RUL-002). There `"keep"` preserves only whether the
-#'   input was written as an A-label (`xn--...`), so `get_host()` and
-#'   `get_domain()` agree on the same row. `"rfc3986"` is unaffected.
+#'   feature of the `idna` dial (RUL-002). There `"keep"` returns the host as
+#'   the WHATWG host parser records it, its ASCII form, so it equals `"idna"`
+#'   (`BÜCHER.example` and `xn--bcher-kva.example` both give
+#'   `xn--bcher-kva.example`; RUL-034), and `"unicode"` gives
+#'   `bücher.example`. `get_host()` and `get_domain()` agree on the same row.
+#'   `"rfc3986"` is unaffected.
 #'
 #'   `"unicode"` is a display form. Under `url_standard = "rfc3986"` it can
 #'   present a host that the same standard rejects on re-parse:
@@ -2668,8 +2670,9 @@ safe_parse_urls <- function(url,
   # decoded Unicode for every eligible host, so Stage B can reproduce every
   # host_encoding spelling (keep / idna / unicode) by SELECTING between the two
   # columns per row -- no further pslr call. host_is_ace drives the per-host
-  # choice for the "keep" spelling, mirroring .derive_domain_tld_vec()'s own
-  # logic exactly.
+  # choice for the `rfc3986` "keep" spelling, mirroring
+  # .derive_domain_tld_vec()'s own logic exactly; `whatwg` "keep" is ascii
+  # (RUL-034).
   # ADR 0012 D2: a general non-special / opaque / reg-name / empty host is NOT
   # asserted to be a DNS name -- force its PSL input to NA so domain/tld resolve
   # to NA and the host never enters the pslr / punycode helpers (ADR 0002).
@@ -2766,9 +2769,13 @@ safe_parse_urls <- function(url,
 
   # Select the domain/TLD spelling exactly as .derive_domain_tld_vec() would for
   # this host_encoding: idna -> ascii, unicode -> unicode, keep -> ascii for
-  # ACE (xn--) hosts else unicode. domain/tld emptiness (used by parse-status)
-  # is spelling-independent, so status is unaffected by the choice.
-  use_ascii <- if (opts$host_encoding == "idna") {
+  # ACE (xn--) hosts else unicode. Under `whatwg`, keep is the ASCII host the
+  # host parser records (RUL-034), so domain/tld are ascii too and agree with
+  # the host. domain/tld emptiness (used by parse-status) is
+  # spelling-independent, so status is unaffected by the choice.
+  use_ascii <- if (opts$host_encoding == "idna" ||
+                     (opts$host_encoding == "keep" &&
+                        .is_whatwg(opts$url_standard))) {
     rep(TRUE, length(a$host_is_ace))
   } else if (opts$host_encoding == "unicode") {
     rep(FALSE, length(a$host_is_ace))
@@ -3288,9 +3295,16 @@ safe_parse_urls <- function(url,
   # host_encoding (a rendering choice); the two fixed spellings (idna/unicode)
   # are also derived so the encoding-independent identity columns
   # (domain_ascii/domain_unicode/tld_ascii/tld_unicode, RURL-owrdsivt) can be
-  # emitted -- mirroring Stage A's both-spelling derivation.
+  # emitted -- mirroring Stage A's both-spelling derivation. Under `whatwg`,
+  # "keep" is the ASCII host the host parser records (RUL-034), so its
+  # domain/tld take the "idna" spelling, as Stage B selects.
+  domain_encoding <- if (host_encoding == "keep" && .is_whatwg(url_standard)) {
+    "idna"
+  } else {
+    host_encoding
+  }
   domain_tld <- .derive_domain_tld(
-    final_host, is_ip_host, tld_source, host_encoding, engine
+    final_host, is_ip_host, tld_source, domain_encoding, engine
   )
   domain <- domain_tld$domain
   tld <- domain_tld$tld

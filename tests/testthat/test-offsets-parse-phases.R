@@ -284,15 +284,16 @@ test_that("the public API keeps its values over the moved chains", {
     "\ufeffhttp://example.com/p", "\u200bhttp://example.com/p",
     off_inv(c(charToRaw("http://example.com/caf"), 0xe9, charToRaw("?q"))), NA
   ))
+  # The whatwg host is the ASCII host the host parser records (RUL-034).
   w <- safe_parse_urls(url, url_standard = "whatwg")
   expect_same_bytes(w$clean_url, c(
-    "http://\u00e9\u4f8b.com/p/q", "http://h.example.com/p\u3002q",
+    "http://xn--9ca4731b.com/p/q", "http://h.example.com/p\u3002q",
     "http://example.com/p", "file://host/\u00e9", "file:///C:/x",
     "http://[1:0:0:2::3]/", "http://[::7f00:1]/", "http://example.com/p\u00e9",
     NA, NA, "http://example.com/caf\ufffd", NA
   ))
   expect_same_bytes(w$host, c(
-    "\u00e9\u4f8b.com", "h.example.com", "example.com", "host", NA,
+    "xn--9ca4731b.com", "h.example.com", "example.com", "host", NA,
     "[1:0:0:2::3]", "[::7f00:1]", "example.com", NA, NA, "example.com", NA
   ))
   # The default is whatwg (ADR 0020).
@@ -312,19 +313,21 @@ test_that("the public API keeps its values over the moved chains", {
     "WWW3.Example.com/p", "www.\u00e9\u4f8b.com/", "a.b.example.com/",
     "\ufeffwww.example.com/"
   ))
-  # Under the default whatwg, UTS-46 maps the leading U+FEFF away first.
+  # Under the default whatwg, UTS-46 maps the leading U+FEFF away first, and
+  # the default host_encoding = "keep" gives the ASCII host the host parser
+  # records (RUL-034).
   expect_same_bytes(safe_parse_urls(hosts, www_handling = "keep")$host, c(
-    "www.example.com", "www.\u00e9\u4f8b.com", "www.a.b.example.com",
+    "www.example.com", "www.xn--9ca4731b.com", "www.a.b.example.com",
     "www.example.com"
   ))
   expect_same_bytes(
     safe_parse_urls(hosts, www_handling = "if_no_subdomain")$host,
-    c("www.example.com", "www.\u00e9\u4f8b.com", "a.b.example.com",
+    c("www.example.com", "www.xn--9ca4731b.com", "a.b.example.com",
       "www.example.com")
   )
   expect_same_bytes(
     safe_parse_urls(hosts, subdomain_levels_to_keep = 0)$host,
-    c("example.com", "www.\u00e9\u4f8b.com", "example.com",
+    c("example.com", "www.xn--9ca4731b.com", "example.com",
       "www.example.com")
   )
   k <- get_url_key(url)

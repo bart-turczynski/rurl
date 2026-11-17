@@ -678,12 +678,23 @@ test_that("get_tld handles NA and edge cases", {
 })
 
 test_that("get_tld handles internationalized domain names (IDNs)", {
-  expect_identical(unname(get_tld("石川.jp")), "石川.jp")
+  # Default host_encoding = "keep" under the default whatwg is the ASCII host
+  # the host parser records (RUL-034), so a U-label host yields an A-label TLD;
+  # "unicode" renders the U-label.
+  expect_identical(unname(get_tld("石川.jp")), "xn--5rtp49c.jp")
+  expect_identical(
+    unname(get_tld("石川.jp", host_encoding = "unicode")), "石川.jp"
+  )
   expect_identical(unname(get_tld("münchen.de")), "de")
-  expect_identical(unname(get_tld("παράδειγμα.ελ")), "ελ")
-  expect_identical(unname(get_tld("中国.中国")), "中国")
-  # Default host_encoding = "keep" mirrors the input spelling: an A-label host
-  # yields an A-label TLD.
+  expect_identical(unname(get_tld("παράδειγμα.ελ")), "xn--qxam")
+  expect_identical(
+    unname(get_tld("παράδειγμα.ελ", host_encoding = "unicode")), "ελ"
+  )
+  expect_identical(unname(get_tld("中国.中国")), "xn--fiqs8s")
+  expect_identical(
+    unname(get_tld("中国.中国", host_encoding = "unicode")), "中国"
+  )
+  # An A-label host yields an A-label TLD.
   expect_identical(
     unname(get_tld("xn--hxajbheg2az3al.xn--qxam")), "xn--qxam"
   )
@@ -702,10 +713,11 @@ test_that("domain accessors honor host_encoding (keep/idna/unicode)", {
   uni <- "https://café.münchen.de/x"
   ace <- "https://xn--caf-dma.xn--mnchen-3ya.de/x"
 
-  # keep: mirror the input spelling on both directions.
-  expect_identical(unname(get_domain(uni)), "münchen.de")
+  # keep: under the default whatwg, the ASCII host the host parser records,
+  # whichever spelling the input used (RUL-034).
+  expect_identical(unname(get_domain(uni)), "xn--mnchen-3ya.de")
   expect_identical(unname(get_domain(ace)), "xn--mnchen-3ya.de")
-  expect_identical(unname(get_subdomain(uni)), "café")
+  expect_identical(unname(get_subdomain(uni)), "xn--caf-dma")
   expect_identical(unname(get_subdomain(ace)), "xn--caf-dma")
 
   # idna: force A-labels regardless of input spelling.
@@ -749,12 +761,16 @@ test_that("get_tld handles edge cases and unexpected inputs gracefully", {
   expect_identical(
     unname(get_tld("xn--fiqs8s.xn--fiqs8s", host_encoding = "unicode")), "中国"
   )
-  expect_identical(unname(get_tld("中国.中国")), "中国")
+  expect_identical(
+    unname(get_tld("中国.中国", host_encoding = "unicode")), "中国"
+  )
   expect_identical(
     unname(get_tld("xn--hxajbheg2az3al.xn--qxam", host_encoding = "unicode")),
     "ελ"
   )
-  expect_identical(unname(get_tld("παράδειγμα.ελ")), "ελ")
+  expect_identical(
+    unname(get_tld("παράδειγμα.ελ", host_encoding = "unicode")), "ελ"
+  )
 
   # Weird but valid cases
   expect_identical(unname(get_tld(".com")), NA_character_)
