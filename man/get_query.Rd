@@ -50,11 +50,16 @@ NA).}
 \item{format}{Return format: "string" (default) or "list" for parsed
 elements.}
 
-\item{decode}{Logical; if TRUE (default), percent-decodes the query
-(the whole string for format="string", keys/values for format="list").
-Set FALSE to obtain the query as written: the raw query for the default
-\code{query_handling = "keep"}, or the canonical re-encoded form (uppercase hex,
-\verb{\%20}, \verb{\%26}/\verb{\%3D}) once any filtering is requested.}
+\item{decode}{Logical; if TRUE (default), decodes the query. For
+\code{format = "string"} a triplet decodes only if it names an unreserved ASCII
+character or is well-formed non-ASCII UTF-8; every other ASCII triplet, such
+as \verb{\%26}, \verb{\%20} or \verb{\%0D}, stays encoded. That rule applies to the string
+form only. For \code{format = "list"} every triplet in keys and values decodes,
+except \verb{\%00}, which stays as written: \verb{a=1\%262} gives \code{list(a = "1&2")},
+while the string form is \code{"a=1\%262"}. Set FALSE to obtain the query as
+written: the raw query for the default \code{query_handling = "keep"}, or the
+canonical re-encoded form (uppercase hex, \verb{\%20}, \verb{\%26}/\verb{\%3D}) once any
+filtering is requested.}
 
 \item{query_handling}{A character string controlling whether (and how) the
 query string is included in \code{clean_url}. Defaults to "drop", which preserves
@@ -185,14 +190,23 @@ Extracts the query component of a URL, optionally parsing it into a list.
 \details{
 The underlying parse preserves the raw query string byte-for-byte (a bare
 key such as \code{?flag} stays \code{flag}, not \verb{flag=}). By default this accessor
-still percent-decodes for readability (\code{decode = TRUE}); pass
-\code{decode = FALSE} to obtain the raw query exactly as written in the URL.
+still percent-decodes the string form for readability (\code{decode = TRUE}), but
+only the triplets that name an unreserved ASCII character or well-formed
+non-ASCII UTF-8. Every other ASCII triplet stays encoded, reserved ones such
+as \verb{\%26} (\code{&}), \verb{\%3D} (\code{=}) and \verb{\%23} (\verb{#}) included, because only an
+unreserved octet's triplet is equivalent to the character it encodes (RFC
+3986 sections 2.2 and 6.2.2.2; under the WHATWG URL Standard the query is a
+percent-encoded string in which \code{&} separates pairs). The list form
+(\code{format = "list"}) decodes its keys and values differently; see \code{decode}.
+Pass \code{decode = FALSE} to obtain the raw query exactly as written in the URL.
 
 Under \code{url_standard = "whatwg"} the underlying query carries the standard's
 percent-encoded spelling (the query percent-encode set is applied, so a
 literal space becomes \verb{\%20}); under \code{url_standard = "rfc3986"} or no
-selector it is the raw source spelling. That distinction is only visible
-with \code{decode = FALSE}, since decoding collapses both spellings.
+selector it is the raw source spelling. That distinction shows with
+\code{decode = FALSE}, and under \code{decode = TRUE} in the string form wherever a
+triplet stays encoded: a literal apostrophe reads \verb{a=it\%27s} under
+\code{"whatwg"} and \verb{a=it's} under \code{"rfc3986"}.
 
 The filtering arguments (\code{query_handling}, \code{params_keep}, \code{params_drop},
 \code{params_case_sensitive}, \code{sort_params}, \code{empty_param_handling},
@@ -200,17 +214,24 @@ The filtering arguments (\code{query_handling}, \code{params_keep}, \code{params
 default to \code{query_handling = "keep"} here: an accessor returns the query as
 found unless you ask it to filter. When no filtering or reordering is
 requested (the default profile), the output is byte-for-byte identical to
-earlier releases; once you opt in, the surviving params are selected first
-and only then rendered per \code{format}/\code{decode}.
+earlier releases except that the string form keeps every ASCII triplet
+outside the unreserved set encoded (RFC 3986 section 2.2); once you opt in,
+the surviving params are selected first and only then rendered per
+\code{format}/\code{decode}. With \code{decode_plus = TRUE}, a \code{+} in a value becomes a
+space while \verb{\%20} stays encoded, so \verb{a=x+y\%20z} reads \verb{a=x y\%20z}.
 }
 \section{Security note}{
 
 Because \code{decode = TRUE} is the \strong{default}, this accessor can return
-characters the URL itself never contained literally — including control
-characters such as CR and LF, which \verb{\%0D}/\verb{\%0A} decode to. Treat the result
-as untrusted input: do not interpolate it into a header, a log line, a
-shell command, or a SQL statement without escaping it for that sink, and do
-not assume it is single-line. Pass \code{decode = FALSE} when you want the query
+non-ASCII characters that the URL held only as percent-encoded UTF-8, such
+as U+0085 (\verb{\%C2\%85}) or U+2028 (\verb{\%E2\%80\%A8}), which a single-line consumer
+may split on. The string form keeps every other ASCII triplet encoded, so
+its CR, LF and \verb{\%00} stay as written. The list form (\code{format = "list"})
+decodes every triplet in its keys and values except \verb{\%00}, so \verb{\%0D\%0A}
+comes back as CR and LF there. Do not assume the result is single-line or
+free of control characters. Treat it as untrusted input: do not interpolate
+it into a header, a log line, a shell command, or a SQL statement without
+escaping it for that sink. Pass \code{decode = FALSE} when you want the query
 exactly as written, with no decoding step at all.
 }
 

@@ -83,12 +83,12 @@ test_that("url_standard does not force path percent-encoding by default", {
 
 test_that("raw query fidelity honors the decode flag", {
   # get_query returns the raw query string; decode=FALSE keeps percent-encoding,
-  # decode=TRUE percent-decodes.
+  # decode=TRUE decodes the unreserved triplets only: %2F stays (RURL-utkkuuaz).
   expect_identical(
     get_query("http://ex.com/p?x=a%2Fb&y=1", decode = FALSE), "x=a%2Fb&y=1"
   )
   expect_identical(
-    get_query("http://ex.com/p?x=a%2Fb&y=1", decode = TRUE), "x=a/b&y=1"
+    get_query("http://ex.com/p?x=a%2Fb&y=1", decode = TRUE), "x=a%2Fb&y=1"
   )
   # The default whatwg record keeps an existing triplet's hex case (WHATWG
   # query state copies `%` unchanged; RUL-026).

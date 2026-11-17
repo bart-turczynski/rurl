@@ -68,10 +68,10 @@ test_that("rfc3986 accessors read the source hex case off the record", {
   expect_identical(
     q, c("q=%7ca", "a=1&utm_source=%7cx&b=%7C", "a=%7ca&A=%7CA")
   )
-  # Decoding is case-insensitive over the triplet, so the decoded view is the
-  # same string it always was.
+  # %7C names no unreserved octet, so it stays encoded under the readable-decode
+  # rule (RURL-utkkuuaz); the decoded view keeps each source's hex case.
   qd <- do.call(get_query, c(list(rul007_grid[1:2], decode = TRUE), rfc))
-  expect_identical(qd, c("q=|a", "q=|a"))
+  expect_identical(qd, c("q=%7ca", "q=%7Ca"))
   f <- do.call(get_fragment, c(list(rul007_grid[1:3]), rfc))
   expect_identical(f, c("f%7ca", "f%7Ca", "f%2f"))
   # The cleaning surface is a lossy policy projection, never a conformance

@@ -270,10 +270,10 @@ test_that("get_query(format = 'list') preserves encoded '&' (%26) in values", {
     get_query("http://example.com/?a=1%262", format = "list")[[1]],
     list(a = "1&2")
   )
-  # Scalar (string) form must be unaffected by the fix.
+  # Scalar (string) form keeps the reserved %26 as written (RURL-utkkuuaz).
   expect_equal(
     unname(get_query("http://example.com/?a=1%262")),
-    "a=1&2"
+    "a=1%262"
   )
 })
 
@@ -397,15 +397,16 @@ test_that("get_query decode = FALSE renders the canonical re-encoded form", {
     )),
     "a=%2F&b=A"
   )
-  # decode = TRUE gives the readable decoded spelling.
+  # decode = TRUE decodes unreserved triplets only: %41 is A, and the reserved
+  # %2f stays as written, hex case included (RURL-utkkuuaz).
   expect_equal(
     unname(get_query("http://e.com/?a=%2f&b=%41", sort_params = TRUE)),
-    "a=/&b=A"
+    "a=%2f&b=A"
   )
-  # %26 inside a value: decoded shows '&', canonical re-encodes it.
+  # %26 inside a value stays encoded under decode = TRUE (RURL-utkkuuaz).
   expect_equal(
     unname(get_query("http://e.com/?a=x%26y", query_handling = "filter")),
-    "a=x&y"
+    "a=x%26y"
   )
   expect_equal(
     unname(get_query(
@@ -1302,7 +1303,8 @@ test_that("get_password() reaches the WHATWG userinfo spelling", {
 
 test_that("get_query() reaches the WHATWG query spelling", {
   u <- "http://example.com/p?a=b\"c"
-  # Only visible undecoded: decoding collapses both spellings.
+  # Shown undecoded here; under decode = TRUE a triplet such as %22 stays
+  # encoded too (RURL-utkkuuaz), so the spellings can show there as well.
   expect_identical(
     get_query(u, decode = FALSE, url_standard = "whatwg"), "a=b%22c"
   )
