@@ -60,18 +60,19 @@ test_that("the fallback decodes exactly what punycoder 1.2.1 decoded", {
 })
 
 test_that("a percent-encoded delimiter never decodes into the rfc3986 host", {
-  # The rfc3986 arm percent-decodes the host before rendering it, so
-  # "xn--a%23-wia" reaches the helper as "xn--a#-wia"; the delimiter
-  # exclusion keeps it an A-label. The colon row is the one place the fix
-  # departs from punycoder 1.2.1, which decoded a `:` after a prefix that is
-  # not scheme-shaped and rendered ";~" + U+4E2D + ":_" + U+00F6, a colon
-  # inside a reg-name (RFC 3986 section 3.2.2).
+  # The rfc3986 arm decodes only unreserved and non-ASCII UTF-8 triplets
+  # before rendering the host (RFC 3986 sections 2.2, 6.2.2.2; RURL-rhwcrezl),
+  # so a host holding `%23` or `%3A` keeps its source spelling. It used to
+  # decode every triplet and hand the helper "xn--a#-wia", which only the
+  # delimiter exclusion kept an A-label. punycoder 1.2.1 decoded a `:` after a
+  # prefix that is not scheme-shaped and rendered ";~" + U+4E2D + ":_" +
+  # U+00F6, a colon inside a reg-name (RFC 3986 section 3.2.2).
   urls <- c(
     "http://xn--a%23-wia.example/", "http://xn--;~%3A_-8qa3179i.example/"
   )
   expect_identical(
     get_host(urls, host_encoding = "unicode", url_standard = "rfc3986"),
-    c("xn--a#-wia.example", "xn--;~:_-8qa3179i.example")
+    c("xn--a%23-wia.example", "xn--;~%3A_-8qa3179i.example")
   )
 })
 
