@@ -346,8 +346,12 @@
 #   is_dotted_name  - >= 2 non-empty dot-separated labels (example.com, a.b.c)
 #   is_ipish        - the host is an IP *attempt*: all-decimal / 0x-hex / octal
 #                     / short-form groups, or anything containing ':' (IPv6)
-#   is_canonical_ip - a valid IPv4 dotted-quad or bracketed IPv6 per the strict
-#                     detector (rejects leading-zero octets and coerced forms)
+#   is_canonical_ip - a valid IPv4 dotted-quad, bracketed IPv6 or bracketed
+#                     RFC 3986 IPvFuture per the strict detector (rejects
+#                     leading-zero octets and coerced forms). It exempts the
+#                     row from the `bad_ip` reject and makes it `host_like`
+#                     for scheme inference; only the rfc3986 parsers then
+#                     accept an IPvFuture (RURL-zniwbsdh)
 # Purely a function of the input string; used to drive rejection in Phase 1.
 .classify_input_host_vec <- function(url) {
   # Strip a leading "scheme://" or scheme-relative "//", then the path/query/

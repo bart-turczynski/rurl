@@ -106,6 +106,25 @@ test_that("no ipv6-* diagnostic fires on an IPvFuture literal", {
   d <- get_url_diagnostics(ipvf_urls, url_standard = "rfc3986")
   expect_false(any(grepl("^ipv6-", unlist(d))))
   expect_identical(lengths(d), c(0L, 0L, 0L))
+  # The bite: the ipv6-* emitter is gated on this internal host_type, which
+  # must not read the colon-bearing `[v1.fe80::1]` as "ipv6".
+  meta <- rurl:::._url_metadata_vec(
+    ipvf_urls, rurl:::.parse_options(url_standard = "rfc3986")
+  )
+  expect_identical(meta$host_type, rep("ipvfuture", 3L))
+})
+
+test_that("a scheme-less or scheme-relative IPvFuture host parses too", {
+  # The strict IP detector makes the bracketed literal host-shaped, so the
+  # input gets the usual scheme inference; whatwg fails it, as on main.
+  u <- c("[v1.x]", "//[v1.x]/")
+  r <- safe_parse_urls(u, url_standard = "rfc3986")
+  expect_identical(r$parse_status, c("ok", "ok-scheme-relative"))
+  expect_identical(r$host, c("[v1.x]", "[v1.x]"))
+  expect_identical(
+    safe_parse_urls(u, url_standard = "whatwg")$parse_status,
+    c("error", "error")
+  )
 })
 
 test_that("host policy judges an IPvFuture host as an IP literal", {
