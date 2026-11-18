@@ -55,8 +55,8 @@ scheme fabricated for it.
 host-shaped input parses as "http://"; any other scheme-less input is
 not a URL and yields \code{"error"}.}
 \item{"none": \code{clean_url} carries the input's own scheme, and
-no scheme for a scheme-less host, except where rurl reads the input as
-scheme-bearing (a \code{host:port} form gets "http").}
+no scheme for a scheme-less host, a \code{host:port} form such as
+\code{"example.com:8080"} included.}
 \item{"strip": \code{clean_url} drops the scheme of an http or https
 URL; any other scheme (\code{ftp:}, \code{file:}, \code{mailto:}) is
 kept.}
