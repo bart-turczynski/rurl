@@ -316,7 +316,7 @@ test_that("hard dependencies report only allow-listed OSS Index advisories", {
     verbose = FALSE
   )
   found <- oss_index_reported(audit)
-  allowed <- vapply(oss_index_allowlist, function(row) row$id, character(1))
+  findings <- oss_index_rule_findings(found, oss_index_allowlist)
 
   # An audit that resolved nothing is not a clean audit. Without this an empty
   # result satisfies rules A and B vacuously, which is the same green-on-
@@ -324,42 +324,12 @@ test_that("hard dependencies report only allow-listed OSS Index advisories", {
   expect_gt(nrow(audit), 0)
 
   # Rule A -- an advisory reported and not allow-listed.
-  expect_equal(sort(setdiff(found$id, allowed)), character())
+  expect_equal(findings$unexpected, character())
 
   # Rule B -- an allow-listed advisory no longer reported. The list may not
   # over-permit, so a row that has outlived its justification fails here.
-  expect_equal(sort(setdiff(allowed, found$id)), character())
+  expect_equal(findings$stale, character())
 
   # Rule C -- drift warns, never fails. See helper-security.R.
-  for (row in oss_index_allowlist) {
-    if (Sys.Date() > row$review) {
-      warning(
-        sprintf(
-          "OSS Index allow-list row %s is past its %s review date.",
-          row$id,
-          format(row$review)
-        ),
-        call. = FALSE
-      )
-    }
-    hit <- found[found$id == row$id, ]
-    if (
-      nrow(hit) > 0 &&
-        package_version(hit$version[1]) > package_version(row$version_seen)
-    ) {
-      warning(
-        sprintf(
-          paste(
-            "OSS Index allow-list row %s was written against %s %s;",
-            "the audit now reports %s. Re-read the advisory."
-          ),
-          row$id,
-          row$package,
-          row$version_seen,
-          hit$version[1]
-        ),
-        call. = FALSE
-      )
-    }
-  }
+  oss_index_warn_drift(found, oss_index_allowlist)
 })
