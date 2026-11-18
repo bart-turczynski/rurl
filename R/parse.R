@@ -76,8 +76,10 @@
 #'   only `"lower_host"` is accepted. `profile = "rfc-syntax"` takes any
 #'   value.
 #' @param trailing_slash_handling A character string specifying how to handle
-#'   trailing slashes in the path component of the cleaned URL. Defaults to
-#'   "none".
+#'   trailing slashes in the path of `clean_url`. Defaults to "none". It
+#'   shapes `clean_url` only: the `path` column is the input's path, since
+#'   `/dir` and `/dir/` are different paths (WHATWG URL path state, RFC 3986
+#'   section 6.2.3).
 #'   \itemize{
 #'     \item{"none": (Default) No specific handling is applied. Path remains as
 #'     is after initial parsing.}
@@ -87,7 +89,8 @@
 #'     solely "/".}
 #'   }
 #' @param index_page_handling A character string specifying how to handle
-#' index/default pages. Defaults to "keep".
+#' index/default pages in `clean_url`. Defaults to "keep". Like
+#' `trailing_slash_handling`, it never changes the `path` column.
 #'   \itemize{
 #'     \item{"keep": (Default) Leave index/default page segments untouched.}
 #'     \item{"strip": Remove a trailing index.* or default.* segment
@@ -2904,6 +2907,27 @@ safe_parse_urls <- function(url,
     revert <- !elig$path_eligible
     path_final[revert] <- a$raw_path[revert]
   }
+  # Index-page and trailing-slash handling shape clean_url only (ADR 0017 D2
+  # rows 5-6). The `path` column is the input's path under the selected
+  # standard: the WHATWG path state keeps its segments, and RFC 3986 section
+  # 6.2.3 makes `/dir` and `/dir/` different paths (RURL-sudxboym). So the
+  # record takes a Phase-3 run without the two dials; `path_final` stays the
+  # clean_url path. General-routed rows already ran without them.
+  path_dialled <- opts$index_page_handling != "keep" ||
+    opts$trailing_slash_handling != "none"
+  path_record <- path_final
+  if (path_dialled) {
+    path_record <- .normalize_path_vec(
+      a$raw_path, opts$path_encoding, opts$path_normalization,
+      "keep", "none",
+      path_identity = opts$path_identity
+    )
+    if (general_acceptance) {
+      path_record[gp] <- path_final[gp]
+      revert <- !elig$path_eligible
+      path_record[revert] <- a$raw_path[revert]
+    }
+  }
 
   # Phase 8: subdomain-level policy (may trim labels from the host).
   final_host <- .apply_subdomain_policy_vec(
@@ -2996,6 +3020,18 @@ safe_parse_urls <- function(url,
         keep_path <- !elig$path_eligible | gp
         clean_cased$path[keep_path] <- path_final[keep_path]
       }
+    }
+  }
+  # The record's path: the dial-free Phase-3 path, case-folded as Phase 10
+  # folds it, with the same eligibility reverts. clean_cased keeps the dialled
+  # path above.
+  if (path_dialled) {
+    cased$path <- .apply_case_policy_vec(
+      NA_character_, path_record, NA_character_, opts$case_handling
+    )$path
+    if (general_acceptance) {
+      keep_path <- !elig$path_eligible | gp
+      cased$path[keep_path] <- path_record[keep_path]
     }
   }
 
@@ -3402,15 +3438,27 @@ safe_parse_urls <- function(url,
     host_for_clean, path_final, raw$scheme, case_handling
   )
   host_output <- cased$host
-  path_output <- cased$path
   scheme_output <- cased$scheme
   presented_scheme <- .apply_case_policy(
     NA_character_, NA_character_, final_scheme, case_handling
   )$scheme
+  # The record's path takes neither index-page nor trailing-slash handling;
+  # they shape clean_url only (ADR 0017 D2 rows 5-6, RURL-sudxboym).
+  path_output <- .apply_case_policy(
+    NA_character_,
+    .normalize_path(
+      raw$path,
+      path_encoding = path_encoding,
+      path_normalization = path_normalization,
+      index_page_handling = "keep",
+      trailing_slash_handling = "none"
+    ),
+    NA_character_, case_handling
+  )$path
 
   # Phase 11: clean URL reconstruction
   clean_url <- .build_clean_url(
-    presented_scheme, host_output, path_output, trailing_slash_handling
+    presented_scheme, host_output, cased$path, trailing_slash_handling
   )
 
   # Phase 12: parse-status assignment

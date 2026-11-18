@@ -700,6 +700,12 @@ get_host <- function(url,
 #' "upper" are an error under both standards, and so is any
 #' `path_normalization` but "dot_segments". Use `get_clean_url()` for a
 #' case-folded or slash-collapsed cleaned URL.
+#' @param trailing_slash_handling,index_page_handling Accepted for
+#' compatibility; neither changes the returned path. They shape `clean_url`
+#' only, since `/dir` and `/dir/` are different paths (WHATWG URL path state,
+#' RFC 3986 section 6.2.3): `get_path("https://example.com/dir/",
+#' trailing_slash_handling = "strip")` is `"/dir/"`. Use `get_clean_url()` for
+#' the path with a trailing slash or index page removed.
 #' @return A character vector of URL paths.
 #' @export
 #' @examples
