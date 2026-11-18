@@ -124,17 +124,24 @@ test_that(".normalize_path applies decode, normalization, index, trailing", {
 })
 
 test_that(".derive_final_scheme respects protocol policy", {
-  expect_equal(rurl:::.derive_final_scheme("keep", TRUE, "ftp"), "ftp")
+  # Arguments: protocol_handling, looks_like_protocol, scheme_inferred,
+  # raw_scheme.
+  dfs <- rurl:::.derive_final_scheme
+  expect_equal(dfs("keep", TRUE, FALSE, "ftp"), "ftp")
   # "http", "https" and "strip" act only on an http or https row
   # (RURL-uxkksgtu).
-  expect_equal(rurl:::.derive_final_scheme("http", TRUE, "ftp"), "ftp")
-  expect_equal(rurl:::.derive_final_scheme("https", TRUE, "ftp"), "ftp")
-  expect_equal(rurl:::.derive_final_scheme("https", TRUE, "http"), "https")
-  expect_equal(rurl:::.derive_final_scheme("http", TRUE, "https"), "http")
-  expect_equal(rurl:::.derive_final_scheme("strip", TRUE, "ftp"), "ftp")
-  expect_true(is.na(rurl:::.derive_final_scheme("strip", TRUE, "https")))
-  expect_equal(rurl:::.derive_final_scheme("none", TRUE, "ftp"), "ftp")
-  expect_true(is.na(rurl:::.derive_final_scheme("none", FALSE, "ftp")))
+  expect_equal(dfs("http", TRUE, FALSE, "ftp"), "ftp")
+  expect_equal(dfs("https", TRUE, FALSE, "ftp"), "ftp")
+  expect_equal(dfs("https", TRUE, FALSE, "http"), "https")
+  expect_equal(dfs("http", TRUE, FALSE, "https"), "http")
+  expect_equal(dfs("strip", TRUE, FALSE, "ftp"), "ftp")
+  expect_true(is.na(dfs("strip", TRUE, FALSE, "https")))
+  expect_equal(dfs("none", TRUE, FALSE, "ftp"), "ftp")
+  expect_true(is.na(dfs("none", FALSE, FALSE, "ftp")))
+  # An inferred scheme (a scheme-less host:port) presents none under "none"
+  # (RURL-ndwnalfe); the other values still see its inferred http.
+  expect_true(is.na(dfs("none", TRUE, TRUE, "http")))
+  expect_equal(dfs("keep", TRUE, TRUE, "http"), "http")
 })
 
 test_that(".detect_ip_host recognizes IPv4 and IPv6, rejects names", {
