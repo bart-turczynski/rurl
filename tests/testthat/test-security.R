@@ -85,11 +85,27 @@ test_that("the allow-list validator rejects rows that are not decisions", {
   )
   expect_match(broken("package", ""), "single package name", fixed = TRUE)
   expect_match(
+    broken("package", NA_character_),
+    "single package name",
+    fixed = TRUE
+  )
+  expect_match(
+    broken("package", "lib curl"),
+    "single package name",
+    fixed = TRUE
+  )
+  expect_match(
     broken("version_seen", "not-a-version"),
     "parseable version",
     fixed = TRUE
   )
+  expect_match(
+    broken("version_seen", NA_character_),
+    "parseable version",
+    fixed = TRUE
+  )
   expect_match(broken("review", "2026-12-01"), "single Date", fixed = TRUE)
+  expect_match(broken("review", as.Date(NA)), "single Date", fixed = TRUE)
   expect_match(
     broken("reason", "unfixable"),
     "too short to be an argument",
@@ -108,9 +124,150 @@ test_that("the allow-list validator rejects rows that are not decisions", {
   )
   expect_match(
     oss_index_allowlist_violations(list(sound, sound)),
-    "duplicate allow-list id",
+    "duplicate allow-list row",
     fixed = TRUE
   )
+})
+
+test_that("the fixture row is itself well formed", {
+  expect_equal(
+    oss_index_allowlist_violations(list(oss_index_fixture_row("CVE-2026-1"))),
+    character()
+  )
+})
+
+test_that("rules A and B pass every allow-listed advisory as reported", {
+  field <- function(name) {
+    vapply(oss_index_allowlist, function(row) row[[name]], character(1))
+  }
+  found <- data.frame(
+    package = field("package"),
+    version = field("version_seen"),
+    id = field("id")
+  )
+  expect_equal(
+    oss_index_rule_findings(found, oss_index_allowlist),
+    list(unexpected = character(), stale = character())
+  )
+})
+
+test_that("rules A and B report unexpected and stale advisories", {
+  rows <- list(
+    oss_index_fixture_row("CVE-2026-18924"),
+    oss_index_fixture_row("CVE-2026-3783")
+  )
+  found <- data.frame(
+    package = "curl",
+    version = "8.1.0",
+    id = c("CVE-2026-18924", "CVE-2026-99999")
+  )
+  findings <- oss_index_rule_findings(found, rows)
+  expect_equal(findings$unexpected, "curl CVE-2026-99999")
+  expect_equal(findings$stale, "curl CVE-2026-3783")
+
+  # An audit that reported nothing leaves every row stale.
+  none <- data.frame(
+    package = character(),
+    version = character(),
+    id = character()
+  )
+  findings <- oss_index_rule_findings(none, rows)
+  expect_equal(findings$unexpected, character())
+  expect_equal(
+    findings$stale,
+    c("curl CVE-2026-18924", "curl CVE-2026-3783")
+  )
+})
+
+test_that("a row covers its advisory in its own package only", {
+  rows <- list(oss_index_fixture_row("CVE-2026-18924"))
+  found <- data.frame(
+    package = "otherbinding",
+    version = "1.0.0",
+    id = "CVE-2026-18924"
+  )
+  findings <- oss_index_rule_findings(found, rows)
+  expect_equal(findings$unexpected, "otherbinding CVE-2026-18924")
+  expect_equal(findings$stale, "curl CVE-2026-18924")
+
+  # A reported advisory with no package names nothing a row could cover.
+  found$package <- NA_character_
+  findings <- oss_index_rule_findings(found, rows)
+  expect_equal(findings$unexpected, "NA CVE-2026-18924")
+  expect_equal(findings$stale, "curl CVE-2026-18924")
+
+  # Not even a row whose package or id is the string "NA".
+  literal <- list(
+    oss_index_fixture_row("CVE-2026-18924", "NA"),
+    oss_index_fixture_row("NA", "curl")
+  )
+  found <- data.frame(
+    package = c(NA, "curl"),
+    version = "8.1.0",
+    id = c("CVE-2026-18924", NA)
+  )
+  findings <- oss_index_rule_findings(found, literal)
+  expect_equal(findings$unexpected, c("NA CVE-2026-18924", "curl NA"))
+  expect_equal(findings$stale, c("NA CVE-2026-18924", "curl NA"))
+
+  # A malformed row covers nothing and is stale as NA.
+  malformed <- list(oss_index_fixture_row("CVE-2026-18924", NA_character_))
+  findings <- oss_index_rule_findings(found[1, ], malformed)
+  expect_equal(findings$unexpected, "NA CVE-2026-18924")
+  expect_equal(findings$stale, NA_character_)
+})
+
+test_that("one advisory allow-listed for two packages is two decisions", {
+  rows <- list(
+    oss_index_fixture_row("CVE-2026-18924", "curl"),
+    oss_index_fixture_row("CVE-2026-18924", "otherbinding")
+  )
+  found <- data.frame(
+    package = c("curl", "otherbinding"),
+    version = "8.1.0",
+    id = "CVE-2026-18924"
+  )
+  expect_equal(oss_index_allowlist_violations(rows), character())
+  expect_equal(
+    oss_index_rule_findings(found, rows),
+    list(unexpected = character(), stale = character())
+  )
+
+  expect_match(
+    oss_index_allowlist_violations(rows[c(1, 1)]),
+    "duplicate allow-list row(s): curl CVE-2026-18924",
+    fixed = TRUE
+  )
+})
+
+test_that("rule C warns on drift and never fails", {
+  row <- list(oss_index_fixture_row("CVE-2026-18924"))
+  before_review <- as.Date("2026-11-30")
+  at <- function(version) {
+    data.frame(package = "curl", version = version, id = "CVE-2026-18924")
+  }
+
+  expect_silent(oss_index_warn_drift(at("8.1.0"), row, before_review))
+  expect_silent(oss_index_warn_drift(at(NA_character_), row, before_review))
+  expect_warning(
+    oss_index_warn_drift(at("8.2.0"), row, before_review),
+    "was written against curl 8.1.0; the audit now reports 8.2.0",
+    fixed = TRUE
+  )
+  expect_warning(
+    oss_index_warn_drift(at("8.1.0"), row, as.Date("2026-12-02")),
+    "is past its 2026-12-01 review date",
+    fixed = TRUE
+  )
+
+  # Another package reporting the same advisory at a later version is not
+  # drift in this row.
+  other <- data.frame(
+    package = c("otherbinding", "curl"),
+    version = c("9.0.0", "8.1.0"),
+    id = "CVE-2026-18924"
+  )
+  expect_silent(oss_index_warn_drift(other, row, before_review))
 })
 
 test_that("hard dependencies report only allow-listed OSS Index advisories", {
@@ -159,7 +316,7 @@ test_that("hard dependencies report only allow-listed OSS Index advisories", {
     verbose = FALSE
   )
   found <- oss_index_reported(audit)
-  allowed <- vapply(oss_index_allowlist, function(row) row$id, character(1))
+  findings <- oss_index_rule_findings(found, oss_index_allowlist)
 
   # An audit that resolved nothing is not a clean audit. Without this an empty
   # result satisfies rules A and B vacuously, which is the same green-on-
@@ -167,42 +324,12 @@ test_that("hard dependencies report only allow-listed OSS Index advisories", {
   expect_gt(nrow(audit), 0)
 
   # Rule A -- an advisory reported and not allow-listed.
-  expect_equal(sort(setdiff(found$id, allowed)), character())
+  expect_equal(findings$unexpected, character())
 
   # Rule B -- an allow-listed advisory no longer reported. The list may not
   # over-permit, so a row that has outlived its justification fails here.
-  expect_equal(sort(setdiff(allowed, found$id)), character())
+  expect_equal(findings$stale, character())
 
   # Rule C -- drift warns, never fails. See helper-security.R.
-  for (row in oss_index_allowlist) {
-    if (Sys.Date() > row$review) {
-      warning(
-        sprintf(
-          "OSS Index allow-list row %s is past its %s review date.",
-          row$id,
-          format(row$review)
-        ),
-        call. = FALSE
-      )
-    }
-    hit <- found[found$id == row$id, ]
-    if (
-      nrow(hit) > 0 &&
-        package_version(hit$version[1]) > package_version(row$version_seen)
-    ) {
-      warning(
-        sprintf(
-          paste(
-            "OSS Index allow-list row %s was written against %s %s;",
-            "the audit now reports %s. Re-read the advisory."
-          ),
-          row$id,
-          row$package,
-          row$version_seen,
-          hit$version[1]
-        ),
-        call. = FALSE
-      )
-    }
-  }
+  oss_index_warn_drift(found, oss_index_allowlist)
 })
