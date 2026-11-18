@@ -1760,6 +1760,10 @@
     original_has_allowed_scheme = original_has_allowed_scheme,
     is_scheme_relative = is_scheme_relative,
     looks_like_host_port = looks_like_host_port,
+    # Rows whose web-parser input carries the fabricated "http://"
+    # (RURL-ndwnalfe); the caller ANDs it with the web route, since only that
+    # route reads `url_to_parse`.
+    add_http = add_http,
     scheme_less_userinfo = scheme_less_userinfo,
     rejected = rejected,
     # Original host token + IPv4-attempt flag for the url_standard host model
@@ -1804,6 +1808,7 @@
     original_has_allowed_scheme = cols$original_has_allowed_scheme[1L],
     is_scheme_relative = cols$is_scheme_relative[1L],
     looks_like_host_port = cols$looks_like_host_port[1L],
+    add_http = cols$add_http[1L],
     scheme_less_userinfo = cols$scheme_less_userinfo[1L],
     rfc3986_path_rootless = cols$rfc3986_path_rootless[1L]
   )
@@ -2200,20 +2205,22 @@
 # scheme (ADR 0012; ADR 0017 D2 row 2), `mailto:user@example.com` must never
 # present as an https URL, and no serializer is handed an NA scheme for a
 # non-web row (`file:` keeps its optional host, `foo:` never renders "NA:").
-# "none" presents only a scheme the input spells. A `host:port` input
-# (`example.com:8080`) matches the scheme regex, since a dot is a scheme
-# character; where the parse read it as a scheme-less host and inferred http,
-# that http stays out of clean_url like any other scheme-less host's
-# (RURL-ndwnalfe). Where the parse took the token as the scheme instead (the
-# RFC 3986 general route, section 3.1), the row keeps it.
+# "none" never presents the http that scheme inference fabricated
+# (`scheme_inferred`: the row reached the web parser with an "http://" prefix
+# rurl added). A `host:port` input (`example.com:8080`) matches the scheme
+# regex, since a dot is a scheme character, so `looks_like_protocol` alone
+# kept its inferred http (RURL-ndwnalfe). A row whose parse took the token as
+# its scheme (`http:8080` or `example.com:8080` on the RFC 3986 general route,
+# section 3.1) was not inferred and keeps it. A scheme-relative row that
+# scheme_relative_handling resolves to http or https still presents it.
 .derive_final_scheme_vec <- function(protocol_handling,
                                      looks_like_protocol,
-                                     looks_like_host_port,
+                                     scheme_inferred,
                                      raw_scheme) {
   web <- !is.na(raw_scheme) & .ascii_tolower(raw_scheme) %in% c("http", "https")
-  spelled <- looks_like_protocol & !(looks_like_host_port & web)
   switch(protocol_handling,
-    none = ifelse(spelled, raw_scheme, NA_character_),
+    none = ifelse(looks_like_protocol & !scheme_inferred, raw_scheme,
+                  NA_character_),
     strip = ifelse(web, NA_character_, raw_scheme),
     http = ifelse(web, "http", raw_scheme),
     https = ifelse(web, "https", raw_scheme),
@@ -2224,10 +2231,10 @@
 # Phase 4 (scalar wrapper): delegates to .derive_final_scheme_vec().
 .derive_final_scheme <- function(protocol_handling,
                                  looks_like_protocol,
-                                 looks_like_host_port,
+                                 scheme_inferred,
                                  raw_scheme) {
   .derive_final_scheme_vec(
-    protocol_handling, looks_like_protocol, looks_like_host_port, raw_scheme
+    protocol_handling, looks_like_protocol, scheme_inferred, raw_scheme
   )
 }
 

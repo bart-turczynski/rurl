@@ -124,7 +124,7 @@ test_that(".normalize_path applies decode, normalization, index, trailing", {
 })
 
 test_that(".derive_final_scheme respects protocol policy", {
-  # Arguments: protocol_handling, looks_like_protocol, looks_like_host_port,
+  # Arguments: protocol_handling, looks_like_protocol, scheme_inferred,
   # raw_scheme.
   dfs <- rurl:::.derive_final_scheme
   expect_equal(dfs("keep", TRUE, FALSE, "ftp"), "ftp")
@@ -138,7 +138,7 @@ test_that(".derive_final_scheme respects protocol policy", {
   expect_true(is.na(dfs("strip", TRUE, FALSE, "https")))
   expect_equal(dfs("none", TRUE, FALSE, "ftp"), "ftp")
   expect_true(is.na(dfs("none", FALSE, FALSE, "ftp")))
-  # A scheme-less host:port input presents no scheme under "none"
+  # An inferred scheme (a scheme-less host:port) presents none under "none"
   # (RURL-ndwnalfe); the other values still see its inferred http.
   expect_true(is.na(dfs("none", TRUE, TRUE, "http")))
   expect_equal(dfs("keep", TRUE, TRUE, "http"), "http")

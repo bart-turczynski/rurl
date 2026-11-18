@@ -2646,9 +2646,12 @@ safe_parse_urls <- function(url,
   # presentation only (ADR 0010, RURL-uxkksgtu): the record, the verdicts and
   # every parse-path classifier read `raw_scheme`, the scheme the parse settled
   # on (diagnostics and serialize run with protocol_handling = "keep").
+  # Only the web route reads the "http://"-prefixed `url_to_parse`, so only a
+  # web-route row carries an inferred scheme; the general, path-rootless and
+  # WHATWG file routes parse the input as spelled (RURL-ndwnalfe).
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol,
-    prep$looks_like_host_port, raw_scheme
+    prep$add_http & web_parseable, raw_scheme
   )
   # The scheme AS SPELLED (RURL-gkmwqpos, RUL-007). Every route ASCII-lowercases
   # `raw_scheme` -- the web parser at its scheme production, the general parser
@@ -3387,8 +3390,8 @@ safe_parse_urls <- function(url,
   # Phase 4: the scheme clean_url presents, per protocol policy (ADR 0010;
   # presentation only, RURL-uxkksgtu)
   final_scheme <- .derive_final_scheme(
-    protocol_handling, prep$looks_like_protocol, prep$looks_like_host_port,
-    raw$scheme
+    # This engine is web-route only, so the prefix flag is the inferred one.
+    protocol_handling, prep$looks_like_protocol, prep$add_http, raw$scheme
   )
 
   # Phase 5: IP host detection
