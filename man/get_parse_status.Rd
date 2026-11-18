@@ -37,7 +37,9 @@ host-shaped input parses as "http://"; any other scheme-less input is
 not a URL and yields \code{"error"}.}
 \item{"none": \code{clean_url} carries the input's own scheme, and
 no scheme for a scheme-less host, a \code{host:port} form such as
-\code{"example.com:8080"} included.}
+\code{"example.com:8080"} included where rurl reads it as host and
+port (under \code{"rfc3986"} with general acceptance it reads
+\code{example.com} as the scheme, which is kept).}
 \item{"strip": \code{clean_url} drops the scheme of an http or https
 URL; any other scheme (\code{ftp:}, \code{file:}, \code{mailto:}) is
 kept.}

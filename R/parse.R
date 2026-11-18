@@ -28,7 +28,9 @@
 #'     not a URL and yields \code{"error"}.}
 #'     \item{"none": \code{clean_url} carries the input's own scheme, and
 #'     no scheme for a scheme-less host, a \code{host:port} form such as
-#'     \code{"example.com:8080"} included.}
+#'     \code{"example.com:8080"} included where rurl reads it as host and
+#'     port (under \code{"rfc3986"} with general acceptance it reads
+#'     \code{example.com} as the scheme, which is kept).}
 #'     \item{"strip": \code{clean_url} drops the scheme of an http or https
 #'     URL; any other scheme (\code{ftp:}, \code{file:}, \code{mailto:}) is
 #'     kept.}
@@ -2648,7 +2650,8 @@ safe_parse_urls <- function(url,
   # on (diagnostics and serialize run with protocol_handling = "keep").
   # Only the web route reads the "http://"-prefixed `url_to_parse`, so only a
   # web-route row carries an inferred scheme; the general, path-rootless and
-  # WHATWG file routes parse the input as spelled (RURL-ndwnalfe).
+  # WHATWG file routes parse it without the inferred "http://" prefix
+  # (RURL-ndwnalfe).
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol,
     prep$add_http & web_parseable, raw_scheme

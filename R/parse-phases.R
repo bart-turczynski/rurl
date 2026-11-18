@@ -1761,8 +1761,8 @@
     is_scheme_relative = is_scheme_relative,
     looks_like_host_port = looks_like_host_port,
     # Rows whose web-parser input carries the fabricated "http://"
-    # (RURL-ndwnalfe); the caller ANDs it with the web route, since only that
-    # route reads `url_to_parse`.
+    # (RURL-ndwnalfe); a caller with non-web routes ANDs it with the web
+    # route, since only that route reads `url_to_parse`.
     add_http = add_http,
     scheme_less_userinfo = scheme_less_userinfo,
     rejected = rejected,

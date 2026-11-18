@@ -88,7 +88,7 @@
 - A `%00` in a `mailto:` local part or domain, other than a backslash-escaped one in quotes, makes that half `"invalid"` and its accessors `NA` (RFC 5322 §3.2.3) (`RURL-rujjbahq`).
 - A `%00` in a path or query no longer truncates the percent-decoded value in `get_clean_url()` or `get_query()`: the triplet stays as written and the rest decodes (RFC 3986 §2.4) (`RURL-fpujlvoq`).
 - `protocol_handling` now shapes only the scheme in `clean_url`, and `"strip"`, `"http"` and `"https"` act only on http(s) URLs; every other column reports the parse (WHATWG URL, scheme state; RFC 3986 §3) (`RURL-uxkksgtu`).
-- `protocol_handling = "none"` no longer adds `http://` to a scheme-less `host:port` input such as `example.com:8080/a` in `clean_url` (`RURL-ndwnalfe`).
+- `protocol_handling = "none"` no longer adds `http://` to a scheme-less `host:port` input such as `example.com:8080/a` in `clean_url` (WHATWG URL, scheme state) (`RURL-ndwnalfe`).
 - `trailing_slash_handling` and `index_page_handling` now shape only `clean_url`; the `path` column and `get_path()` keep the parsed path (WHATWG URL, path state; RFC 3986 §6.2.3) (`RURL-sudxboym`).
 
 ### Deprecated
