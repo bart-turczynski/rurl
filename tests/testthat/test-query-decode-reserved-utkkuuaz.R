@@ -89,10 +89,10 @@ test_that("decode leaves malformed queries as they are", {
   )
 })
 
-test_that("an absent or empty query stays NA, as before", {
-  # Unchanged by the decode rule: main reads `?` alone as no query.
+test_that("an absent query stays NA; an empty one is empty", {
+  # A `?` alone is an empty query, not an absent one (RURL-qvbkrrbm).
   expect_true(is.na(get_query("http://h/nopath")))
-  expect_true(is.na(get_query("http://h/?")))
+  expect_identical(get_query("http://h/?"), "")
   expect_true(is.na(get_query(NA_character_)))
 })
 
