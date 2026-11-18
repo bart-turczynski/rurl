@@ -91,6 +91,7 @@
 - `protocol_handling = "none"` no longer adds `http://` to a scheme-less `host:port` input such as `example.com:8080/a` in `clean_url` (WHATWG URL, scheme state) (`RURL-ndwnalfe`).
 - `trailing_slash_handling` and `index_page_handling` now shape only `clean_url`; the `path` column and `get_path()` keep the parsed path (WHATWG URL, path state; RFC 3986 §6.2.3) (`RURL-sudxboym`).
 - Under `url_standard = "whatwg"`, `port_handling = "keep"` shapes only `clean_url`; the `port` column stays `NA` for a default port, as `get_port()` reports (WHATWG URL, port state) (`RURL-eglhowqo`).
+- `serialize_url(standard = "rfc3986", form = "source")` writes the port as given: `:080` and an empty `:` survive (RFC 3986 §5.3) (`RURL-zrvhcsud`).
 
 ### Deprecated
 
