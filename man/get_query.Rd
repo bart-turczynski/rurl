@@ -188,7 +188,11 @@ govern \code{path_encoding} (an orthogonal path-presentation knob that layers
 on any profile), IDNA rendering, or query handling.}
 }
 \value{
-A character vector (format="string") or list (format="list").
+A character vector (format="string") or list (format="list"). In
+the string form a present but empty query (\verb{https://example.com/?}) is
+\code{""} and an absent one (\verb{https://example.com/}) is \code{NA}, as the WHATWG URL
+query state and RFC 3986 section 3.4 tell them apart; \code{query_handling = "drop"} gives \code{NA} for both. The list form gives an empty list for both.
+The \code{query} column of \code{\link[=safe_parse_urls]{safe_parse_urls()}} stays \code{NA} for both (ADR 0012).
 }
 \description{
 Extracts the query component of a URL, optionally parsing it into a list.
@@ -243,6 +247,7 @@ exactly as written, with no decoding step at all.
 
 \examples{
 get_query("http://example.com/path?a=1&b=2")
+get_query(c("http://example.com/?", "http://example.com/"))
 get_query("http://example.com/path?a=1&b=2", format = "list")
 # Drop trackers, keep contentful params:
 get_query(

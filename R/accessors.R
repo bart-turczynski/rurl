@@ -834,10 +834,16 @@ get_path <- function(
 #' the surviving params are selected first and only then rendered per
 #' `format`/`decode`. With `decode_plus = TRUE`, a `+` in a value becomes a
 #' space while `%20` stays encoded, so `a=x+y%20z` reads `a=x y%20z`.
-#' @return A character vector (format="string") or list (format="list").
+#' @return A character vector (format="string") or list (format="list"). In
+#' the string form a present but empty query (`https://example.com/?`) is
+#' `""` and an absent one (`https://example.com/`) is `NA`, as the WHATWG URL
+#' query state and RFC 3986 section 3.4 tell them apart; `query_handling =
+#' "drop"` gives `NA` for both. The list form gives an empty list for both.
+#' The `query` column of [safe_parse_urls()] stays `NA` for both (ADR 0012).
 #' @export
 #' @examples
 #' get_query("http://example.com/path?a=1&b=2")
+#' get_query(c("http://example.com/?", "http://example.com/"))
 #' get_query("http://example.com/path?a=1&b=2", format = "list")
 #' # Drop trackers, keep contentful params:
 #' get_query(
