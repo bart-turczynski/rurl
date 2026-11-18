@@ -144,7 +144,8 @@ test_that("port_range = 'unbounded' drops the bound, not the digits", {
   # A run with no lossless `integer` representation is still refused, because
   # the identity record types its port `integer(1)`: accepting it made the parse
   # `ok` while the port silently VANISHED from the round-trip. This is a
-  # representation limit, not the transport bound under another name.
+  # representation limit, not the transport bound under another name; RUL-036
+  # keeps it as a declared deviation from RFC 3986 sec 3.2.3 (`*DIGIT`).
   expect_null(pu("http://example.com:2147483648/"))
   expect_null(pu("http://example.com:99999999999999999999/"))
   # Non-digits are still non-digits whatever the range.
@@ -169,6 +170,33 @@ test_that("the port axis follows the selector, losslessly", {
   expect_identical(suppressWarnings(safe_parse_urls(u)$parse_status), "error")
   # Lossless both ways: the port survives the source round-trip.
   expect_identical(serialize_url(u, standard = "rfc3986", form = "source"), u)
+})
+
+test_that("a port above 2^31 - 1 is a declared representation limit", {
+  # Standards literal audit 2026-10-28, finding 14: RFC 3986 sec 3.2.3 allows
+  # any `*DIGIT` port, but the `port` column is an R integer. The owner kept
+  # the column type and today's behavior (RUL-036, RURL-halyfkxf): the web
+  # route refuses the row, the general route parses it with an `NA` port.
+  u <- c("http://example.com:2147483648/", "foo://h:99999999999/")
+  r <- safe_parse_urls(u, url_standard = "rfc3986",
+                       scheme_acceptance = "general")
+  expect_identical(r$parse_status, c("error", "ok"))
+  expect_identical(r$port, c(NA_integer_, NA_integer_))
+  expect_identical(r$host, c(NA_character_, "h"))
+  expect_identical(
+    get_port(u, url_standard = "rfc3986", scheme_acceptance = "general"),
+    c(NA_integer_, NA_integer_)
+  )
+  # The general route's port does not survive the round-trip.
+  expect_identical(
+    serialize_url(u[[2]], standard = "rfc3986", form = "source"), "foo://h/"
+  )
+  # The largest R integer is still a port on the web route.
+  edge <- safe_parse_urls("http://example.com:2147483647/",
+                          url_standard = "rfc3986",
+                          scheme_acceptance = "general")
+  expect_identical(edge$parse_status, "ok")
+  expect_identical(edge$port, 2147483647L)
 })
 
 test_that("userinfo splits at the first colon and admits at most one '@'", {
