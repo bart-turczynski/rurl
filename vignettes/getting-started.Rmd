@@ -31,13 +31,14 @@ Use `safe_parse_url()` to parse URLs robustly:
 safe_parse_url("https://sub.example.co.uk/path?q=1")
 ```
 
-The `protocol_handling` argument controls how schemes are handled:
+The `protocol_handling` argument controls only how the scheme is presented in
+`clean_url`; the `scheme` column and every other component report the parse:
 
-- `"keep"` (default; keeps the current protocol or prepends `http://` if missing)
-- `"none"` (doesn't add, remove, or change protocols)
-- `"strip"` (removes protocols)
-- `"http"` (changes protocols to `http://` or adds it if missing)
-- `"https"` (changes protocols to `https://` or adds it if missing)
+- `"keep"` (default; `clean_url` carries the parsed scheme, `http://` for a scheme-less host)
+- `"none"` (`clean_url` carries the input's own scheme, and none for a scheme-less host unless rurl reads a `host:port` form as scheme-bearing)
+- `"strip"` (`clean_url` drops the scheme of an http or https URL; other schemes are kept)
+- `"http"` (`clean_url` presents an http or https URL as `http://`; other schemes are kept)
+- `"https"` (`clean_url` presents an http or https URL as `https://`; other schemes are kept)
 
 # Extracting URL Components
 

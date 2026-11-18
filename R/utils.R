@@ -368,11 +368,17 @@
 # scheme_relative. Stage B (._parse_stage_b_vec) derives every remaining column
 # from these plus the presentation options and is never cached.
 .spu_stage_a_fields <- list(
+  # The scheme clean_url PRESENTS under `protocol_handling` (ADR 0010). It
+  # reaches clean_url assembly and nothing else (RURL-uxkksgtu): the record,
+  # the verdicts and every parse-path classifier read `raw_scheme`; the
+  # diagnostics and serialize seams read this field but always run with
+  # protocol_handling = "keep", where it equals `raw_scheme`. Cached because
+  # the Stage-A key already carries `protocol_handling`.
   list(name = "final_scheme", default = NA_character_, template = character(1)),
-  # The scheme as the source SPELLED it (RURL-gkmwqpos, RUL-007): `final_scheme`
+  # The scheme as the source SPELLED it (RURL-gkmwqpos, RUL-007): `raw_scheme`
   # is the ASCII-lowercased classification token every route produces, and RFC
   # 3986 sec 6.2.2.1 makes that fold a normalization the `source` serializer
-  # form must not apply. Equal to `final_scheme` wherever the prepared input's
+  # form must not apply. Equal to `raw_scheme` wherever the prepared input's
   # scheme token is not the one the parse settled on. Cached: a parse fact.
   list(
     name = "source_scheme", default = NA_character_, template = character(1)
@@ -381,7 +387,9 @@
   # into `final_scheme` (RUL-016): a port's default-ness is a fact about the
   # parsed scheme (RFC 3986 sec 6.2.3; WHATWG port state), never about the
   # scheme the projection renders, so Stage B keys the default-port table off
-  # this column. Cached: a parse fact.
+  # this column. So do the `scheme` column, the verdicts, the general
+  # eligibility masks and the WHATWG query encode set (RURL-uxkksgtu).
+  # Cached: a parse fact.
   list(name = "raw_scheme", default = NA_character_, template = character(1)),
   list(name = "final_host", default = NA_character_, template = character(1)),
   list(name = "is_ip_host", default = NA, template = logical(1)),

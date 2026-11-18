@@ -16,8 +16,10 @@ get_scheme(
 \arguments{
 \item{url}{A character vector of URLs.}
 
-\item{protocol_handling}{A character string specifying how to handle
-protocols. Defaults to "keep".
+\item{protocol_handling}{A character string specifying how the scheme is
+presented in \code{clean_url}. Defaults to "keep". It changes nothing
+else: the \code{scheme} column, \code{get_scheme()}, the other components
+and \code{parse_status} always report the parse of the input (ADR 0010).
 Regardless of this option, rurl only processes authority-based URLs whose
 scheme is one of http, https, ftp, or ftps; a scheme-bearing input with any
 other scheme (e.g. \code{mailto:}, \code{tel:}, \code{ws:}) yields
@@ -28,15 +30,19 @@ IP literal (integer/hex/octal/short forms, or leading-zero octets like
 \code{"192.168.010.1"}) is rejected as \code{"error"} rather than having a
 scheme fabricated for it.
 \itemize{
-\item{"keep": If a supported scheme exists (http, https, ftp, ftps), it's
-used. If no scheme and the input is host-shaped, "http://" is added;
-otherwise the input is not a URL and yields \code{"error"}.}
-\item{"none": If a supported scheme exists, it's used. If no scheme, then
-no scheme is used (scheme component will be NA).}
-\item{"strip": Any existing scheme is removed (scheme component will be
-NA).}
-\item{"http": The scheme is forced to be "http".}
-\item{"https": The scheme is forced to be "https".}
+\item{"keep": \code{clean_url} carries the parsed scheme. A scheme-less
+host-shaped input parses as "http://"; any other scheme-less input is
+not a URL and yields \code{"error"}.}
+\item{"none": \code{clean_url} carries the input's own scheme, and
+no scheme for a scheme-less host, except where rurl reads the input as
+scheme-bearing (a \code{host:port} form gets "http").}
+\item{"strip": \code{clean_url} drops the scheme of an http or https
+URL; any other scheme (\code{ftp:}, \code{file:}, \code{mailto:}) is
+kept.}
+\item{"http": \code{clean_url} presents an http or https URL as
+"http"; any other scheme (\code{ftp:}, \code{mailto:}) is kept.}
+\item{"https": \code{clean_url} presents an http or https URL as
+"https"; any other scheme is kept.}
 }}
 
 \item{scheme_relative_handling}{How to handle URLs starting with "//".
@@ -131,6 +137,11 @@ allowlist parses, so an opaque scheme such as \code{mailto:} or \code{tel:}
 yields \code{NA}. Pass \code{scheme_acceptance = "general"} (which requires
 an explicit \code{url_standard}) to run the general parser, under which those
 schemes resolve and their scheme string is returned.
+
+The result is always the parsed scheme. \code{protocol_handling} only
+changes how \code{clean_url} presents the scheme, so it no longer moves
+this component: \code{get_scheme("ftp://h/x", protocol_handling = "https")}
+is \code{"ftp"}, and a scheme-less host is \code{"http"} under every value.
 }
 \examples{
 get_scheme("https://example.com")

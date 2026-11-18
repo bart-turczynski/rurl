@@ -156,10 +156,11 @@ test_that("whatwg: the parse-record port column uses the parsed scheme", {
   )
 })
 
-test_that("general: a non-special scheme upgraded to https keeps :443", {
-  # `foo:` has no default port, so a rewrite to `https` must not make 443
-  # look default. Pinned on both named standards (the general route has its
-  # own serializers, which now take the parsed scheme for the port table).
+test_that("general: a non-special scheme under https keeps foo: and :443", {
+  # `foo:` has no default port, so 443 is never default for it. "https" no
+  # longer rewrites a non-http(s) scheme (RURL-uxkksgtu), so the row keeps
+  # `foo:` too. Pinned on both named standards (the general route has its
+  # own serializers, which take the parsed scheme for the port table).
   for (s in c("whatwg", "rfc3986")) {
     expect_identical(
       get_clean_url(
@@ -167,7 +168,7 @@ test_that("general: a non-special scheme upgraded to https keeps :443", {
         scheme_acceptance = "general", scheme_policy = "require",
         port_handling = "strip_default", protocol_handling = "https"
       ),
-      "https://example.com:443/a",
+      "foo://example.com:443/a",
       info = s
     )
   }

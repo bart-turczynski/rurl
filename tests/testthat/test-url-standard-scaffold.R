@@ -69,13 +69,16 @@ test_that("invalid url_standard values error clearly", {
 # --- Positional-argument backward-compatibility (hard CRAN constraint)
 
 test_that("a positional 2nd arg still binds to the historical parameter", {
-  # safe_parse_url()'s 2nd positional is protocol_handling; "none" must NOT add
-  # a scheme to a scheme-less host, proving url_standard did not steal slot 2.
+  # safe_parse_url()'s 2nd positional is protocol_handling; "none" must NOT
+  # present a scheme for a scheme-less host in clean_url, proving url_standard
+  # did not steal slot 2. (The `scheme` column is the parse, `http`, under
+  # every protocol_handling: RURL-uxkksgtu.)
   expect_identical(
-    safe_parse_url("example.com", "none")$scheme,
-    safe_parse_url("example.com", protocol_handling = "none")$scheme
+    safe_parse_url("example.com", "none")$clean_url,
+    safe_parse_url("example.com", protocol_handling = "none")$clean_url
   )
-  expect_true(is.na(safe_parse_url("example.com", "none")$scheme))
+  expect_identical(safe_parse_url("example.com", "none")$clean_url,
+                   "example.com/")
 
   # get_host()'s 2nd positional is likewise protocol_handling.
   expect_identical(

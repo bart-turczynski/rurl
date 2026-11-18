@@ -2189,16 +2189,26 @@
   unlist(out, use.names = FALSE)
 }
 
-# Phase 4 (vector): resolve the final scheme according to protocol policy.
+# Phase 4 (vector): the scheme `clean_url` PRESENTS under protocol policy
+# (ADR 0010: the dial answers only how the scheme is presented in clean_url).
+# It is never the parsed scheme: the `scheme` column, the verdicts and every
+# parse-path classifier read `raw_scheme` (RURL-uxkksgtu; the diagnostics and
+# serialize seams still read `final_scheme`, but they always run with
+# protocol_handling = "keep", where the two agree). "http", "https" and
+# "strip" act only on a row the parse read as http or https: a web
+# presentation is not a license to rewrite or drop an arbitrary admitted
+# scheme (ADR 0012; ADR 0017 D2 row 2), `mailto:user@example.com` must never
+# present as an https URL, and no serializer is handed an NA scheme for a
+# non-web row (`file:` keeps its optional host, `foo:` never renders "NA:").
 .derive_final_scheme_vec <- function(protocol_handling,
                                      looks_like_protocol,
                                      raw_scheme) {
-  n <- length(looks_like_protocol)
+  web <- !is.na(raw_scheme) & .ascii_tolower(raw_scheme) %in% c("http", "https")
   switch(protocol_handling,
     none = ifelse(looks_like_protocol, raw_scheme, NA_character_),
-    strip = rep(NA_character_, n),
-    http = rep("http", n),
-    https = rep("https", n),
+    strip = ifelse(web, NA_character_, raw_scheme),
+    http = ifelse(web, "http", raw_scheme),
+    https = ifelse(web, "https", raw_scheme),
     keep = raw_scheme
   )
 }

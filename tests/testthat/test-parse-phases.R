@@ -125,9 +125,14 @@ test_that(".normalize_path applies decode, normalization, index, trailing", {
 
 test_that(".derive_final_scheme respects protocol policy", {
   expect_equal(rurl:::.derive_final_scheme("keep", TRUE, "ftp"), "ftp")
-  expect_equal(rurl:::.derive_final_scheme("http", TRUE, "ftp"), "http")
-  expect_equal(rurl:::.derive_final_scheme("https", TRUE, "ftp"), "https")
-  expect_true(is.na(rurl:::.derive_final_scheme("strip", TRUE, "ftp")))
+  # "http", "https" and "strip" act only on an http or https row
+  # (RURL-uxkksgtu).
+  expect_equal(rurl:::.derive_final_scheme("http", TRUE, "ftp"), "ftp")
+  expect_equal(rurl:::.derive_final_scheme("https", TRUE, "ftp"), "ftp")
+  expect_equal(rurl:::.derive_final_scheme("https", TRUE, "http"), "https")
+  expect_equal(rurl:::.derive_final_scheme("http", TRUE, "https"), "http")
+  expect_equal(rurl:::.derive_final_scheme("strip", TRUE, "ftp"), "ftp")
+  expect_true(is.na(rurl:::.derive_final_scheme("strip", TRUE, "https")))
   expect_equal(rurl:::.derive_final_scheme("none", TRUE, "ftp"), "ftp")
   expect_true(is.na(rurl:::.derive_final_scheme("none", FALSE, "ftp")))
 })
