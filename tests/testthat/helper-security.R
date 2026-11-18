@@ -46,6 +46,21 @@ oss_index_allowlist_fields <- c(
   "reason"
 )
 
+# A well-formed allow-list row for the offline tests, which must not depend on
+# what the live list happens to hold.
+oss_index_fixture_row <- function(id, package = "curl") {
+  list(
+    id = id,
+    package = package,
+    version_seen = "8.1.0",
+    review = as.Date("2026-12-01"),
+    reason = paste(
+      "A fixture rationale long enough to be an argument rather than a",
+      "placeholder, so that the validator accepts the row."
+    )
+  )
+}
+
 # Problems with a set of allow-list rows, as a character vector; empty when the
 # set is well formed. Written as a function returning findings rather than as a
 # block of expectations so that it can be exercised against fixtures -- with no
