@@ -54,20 +54,30 @@ test_that("the ticket's two rows both present scheme-less", {
   )
 })
 
+expected_exclude <- list(
+  whatwg = c("example.com/a", "example.com/", "localhost/", "example.com/"),
+  rfc3986 = c("example.com/a", "example.com", "localhost", "example.com/")
+)
+
 test_that("the scalar engine agrees with the vector engine under \"none\"", {
   for (std in c("whatwg", "rfc3986")) {
+    # The scalar engine renders no port and takes case_handling explicitly;
+    # the vector call matches it with port_handling = "exclude" and its
+    # default host case fold.
     vec <- safe_parse_urls(host_port_inputs, url_standard = std,
-                           protocol_handling = "none")$clean_url
+                           protocol_handling = "none",
+                           port_handling = "exclude")$clean_url
     sca <- vapply(host_port_inputs, function(u) {
       rurl:::._safe_parse_url_impl(
         url = u, protocol_handling = "none", www_handling = "none",
-        tld_source = "all", case_handling = "keep",
+        tld_source = "all", case_handling = "lower",
         trailing_slash_handling = "none", index_page_handling = "keep",
         path_normalization = "none", scheme_relative_handling = "keep",
         subdomain_levels_to_keep = NULL, url_standard = std
       )$clean_url
     }, character(1), USE.NAMES = FALSE)
-    expect_false(any(startsWith(sca, "http:")), info = std)
+    expect_identical(sca, vec, info = std)
+    expect_identical(sca, expected_exclude[[std]], info = std)
     expect_identical(safe_parse_url(host_port_inputs[1], url_standard = std,
                                     protocol_handling = "none")$clean_url,
                      vec[1], info = std)
@@ -106,6 +116,36 @@ test_that("inputs that spell a scheme keep it under \"none\"", {
   )
 })
 
+# `http:8080` is flagged host:port too, but on the RFC 3986 general route the
+# parse reads `http` as its scheme and `8080` as a rootless path (section 3).
+# Nothing was inferred, so "none" keeps the spelled scheme.
+spelled_digit_inputs <- c("http:8080", "https:443/x", "HTTP:80", "http:80/a")
+
+test_that("an http:<digits> row keeps its spelled scheme under \"none\"", {
+  for (sp in c("infer", "require")) {
+    for (pt in c("keep", "exclude")) {
+      none <- safe_parse_urls(spelled_digit_inputs, url_standard = "rfc3986",
+                              scheme_acceptance = "general",
+                              scheme_policy = sp, port_handling = pt,
+                              protocol_handling = "none")
+      keep <- safe_parse_urls(spelled_digit_inputs, url_standard = "rfc3986",
+                              scheme_acceptance = "general",
+                              scheme_policy = sp, port_handling = pt,
+                              protocol_handling = "keep")
+      info <- paste(sp, pt)
+      expect_identical(none$clean_url,
+                       c("http:8080", "https:443/x", "http:80", "http:80/a"),
+                       info = info)
+      expect_identical(none$clean_url, keep$clean_url, info = info)
+    }
+  }
+  expect_identical(
+    safe_parse_urls(spelled_digit_inputs, profile = "rfc-syntax",
+                    protocol_handling = "none")$clean_url,
+    c("http:8080", "https:443/x", "HTTP:80", "http:80/a")
+  )
+})
+
 # Over the fixture corpora, a row whose input spells its parsed scheme presents
 # exactly its keep form under "none", and no other row presents a scheme.
 test_that("\"none\" presents a scheme only where the input spells one", {
@@ -119,25 +159,29 @@ test_that("\"none\" presents a scheme only where the input spells one", {
   )
   ext <- vapply(fx$input_json[fx$runnable == "yes"], jsonlite::fromJSON,
                 character(1), USE.NAMES = FALSE)
-  x <- unique(c(parse_corpus_urls(), ext, host_port_inputs))
+  x <- unique(c(parse_corpus_urls(), ext, host_port_inputs,
+                spelled_digit_inputs, "ftp:21", "HTTPS:8443/p", "foo:8080",
+                "localhost:80"))
   # The WHATWG basic URL parser drops ASCII tab/newline anywhere and C0 or
   # space at either end before it reads the scheme.
   bare <- gsub("[\t\n\r]", "", x, useBytes = TRUE)
   bare <- sub("^[\001-\040]+", "", bare, useBytes = TRUE)
-  for (std in c("whatwg", "rfc3986")) {
-    for (sa in c("web", "general")) {
-      keep <- safe_parse_urls(x, url_standard = std, scheme_acceptance = sa)
-      none <- safe_parse_urls(x, url_standard = std, scheme_acceptance = sa,
-                              protocol_handling = "none")
-      pre <- paste0(keep$scheme, ":")
-      spelled <- !is.na(keep$scheme) & !is.na(bare) &
-        rurl:::.ascii_tolower(substring(bare, 1L, nchar(pre))) == pre
-      info <- paste(std, sa)
-      expect_identical(none$clean_url[spelled], keep$clean_url[spelled],
-                       info = info)
-      web_present <- !is.na(none$clean_url) &
-        grepl("^https?://", none$clean_url)
-      expect_false(any(web_present & !spelled), info = info)
-    }
+  grid <- expand.grid(std = c("whatwg", "rfc3986"), sa = c("web", "general"),
+                      sp = c("infer", "require"), stringsAsFactors = FALSE)
+  for (i in seq_len(nrow(grid))) {
+    g <- grid[i, ]
+    keep <- safe_parse_urls(x, url_standard = g$std, scheme_acceptance = g$sa,
+                            scheme_policy = g$sp)
+    none <- safe_parse_urls(x, url_standard = g$std, scheme_acceptance = g$sa,
+                            scheme_policy = g$sp, protocol_handling = "none")
+    pre <- paste0(keep$scheme, ":")
+    spelled <- !is.na(keep$scheme) & !is.na(bare) &
+      rurl:::.ascii_tolower(substring(bare, 1L, nchar(pre))) == pre
+    info <- paste(g$std, g$sa, g$sp)
+    expect_identical(none$clean_url[spelled], keep$clean_url[spelled],
+                     info = info)
+    web_present <- !is.na(none$clean_url) &
+      grepl("^https?://", none$clean_url)
+    expect_false(any(web_present & !spelled), info = info)
   }
 })
