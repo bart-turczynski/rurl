@@ -2200,12 +2200,20 @@
 # scheme (ADR 0012; ADR 0017 D2 row 2), `mailto:user@example.com` must never
 # present as an https URL, and no serializer is handed an NA scheme for a
 # non-web row (`file:` keeps its optional host, `foo:` never renders "NA:").
+# "none" presents only a scheme the input spells. A `host:port` input
+# (`example.com:8080`) matches the scheme regex, since a dot is a scheme
+# character; where the parse read it as a scheme-less host and inferred http,
+# that http stays out of clean_url like any other scheme-less host's
+# (RURL-ndwnalfe). Where the parse took the token as the scheme instead (the
+# RFC 3986 general route, section 3.1), the row keeps it.
 .derive_final_scheme_vec <- function(protocol_handling,
                                      looks_like_protocol,
+                                     looks_like_host_port,
                                      raw_scheme) {
   web <- !is.na(raw_scheme) & .ascii_tolower(raw_scheme) %in% c("http", "https")
+  spelled <- looks_like_protocol & !(looks_like_host_port & web)
   switch(protocol_handling,
-    none = ifelse(looks_like_protocol, raw_scheme, NA_character_),
+    none = ifelse(spelled, raw_scheme, NA_character_),
     strip = ifelse(web, NA_character_, raw_scheme),
     http = ifelse(web, "http", raw_scheme),
     https = ifelse(web, "https", raw_scheme),
@@ -2216,8 +2224,11 @@
 # Phase 4 (scalar wrapper): delegates to .derive_final_scheme_vec().
 .derive_final_scheme <- function(protocol_handling,
                                  looks_like_protocol,
+                                 looks_like_host_port,
                                  raw_scheme) {
-  .derive_final_scheme_vec(protocol_handling, looks_like_protocol, raw_scheme)
+  .derive_final_scheme_vec(
+    protocol_handling, looks_like_protocol, looks_like_host_port, raw_scheme
+  )
 }
 
 # Phase 5 (vector): detect whether each host is an IP literal (IPv4, IPv6 or

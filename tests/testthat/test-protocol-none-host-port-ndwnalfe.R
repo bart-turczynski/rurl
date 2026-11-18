@@ -90,6 +90,14 @@ test_that("inputs that spell a scheme keep it under \"none\"", {
       expect_identical(bare$clean_url, "example.com/a", info = paste(std, pt))
     }
   }
+  # Under RFC 3986 general acceptance `example.com:` IS the scheme (section
+  # 3.1): the row is scheme-bearing and keeps it.
+  expect_identical(
+    safe_parse_urls(host_port_inputs[1:2], url_standard = "rfc3986",
+                    scheme_acceptance = "general",
+                    protocol_handling = "none")$clean_url,
+    c("example.com:8080/a", "example.com:8080")
+  )
   # An opaque general-acceptance row is not a host:port and keeps its scheme.
   expect_identical(
     safe_parse_urls("urn:a:1", scheme_acceptance = "general",
