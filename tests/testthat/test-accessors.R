@@ -969,7 +969,9 @@ test_that("index_page_handling strips index/default pages", {
     index_page_handling = "strip",
     trailing_slash_handling = "strip"
   )
-  expect_equal(res_strip$path, "/")
+  # The dials shape clean_url only; the path column is the parsed path
+  # (ADR 0017 D2 rows 5-6, RURL-sudxboym).
+  expect_equal(res_strip$path, "/index.html")
   expect_equal(res_strip$clean_url, "http://example.com")
 
   res_strip_keep <- safe_parse_url(
@@ -977,7 +979,7 @@ test_that("index_page_handling strips index/default pages", {
     index_page_handling = "strip",
     trailing_slash_handling = "keep"
   )
-  expect_equal(res_strip_keep$path, "/")
+  expect_equal(res_strip_keep$path, "/index.html/")
   expect_equal(res_strip_keep$clean_url, "http://example.com/")
 })
 

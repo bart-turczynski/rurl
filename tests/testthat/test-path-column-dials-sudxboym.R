@@ -63,7 +63,8 @@ test_that("edge inputs keep the dial-free record under every value", {
 # Controls: the dials still do their whole job on clean_url.
 test_that("clean_url still takes both dials", {
   expect_identical(
-    get_clean_url(c("http://example.com/dir/", "http://example.com/a/index.html",
+    get_clean_url(c("http://example.com/dir/",
+                    "http://example.com/a/index.html",
                     "http://./", "http://./x/"),
                   trailing_slash_handling = "strip",
                   index_page_handling = "strip"),

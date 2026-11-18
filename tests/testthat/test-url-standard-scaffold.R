@@ -168,12 +168,13 @@ test_that("whatwg's clean_url-only collapse precedes index and slash rules", {
     ),
     "http://example.com/a/c/"
   )
-  # The record keeps the WHATWG path.
+  # The record keeps the WHATWG path: neither the collapse nor the
+  # trailing-slash strip reaches it (RURL-sudxboym).
   expect_identical(
     safe_parse_url("http://example.com/a//",
       path_normalization = "both", trailing_slash_handling = "strip"
     )$path,
-    "/a/"
+    "/a//"
   )
 })
 

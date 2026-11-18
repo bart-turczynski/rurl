@@ -195,7 +195,10 @@ test_that("the general path column skips index, trailing and case steps", {
                        index_page_handling = "strip",
                        trailing_slash_handling = "strip",
                        case_handling = "lower")
-  expect_identical(s$path, c("/a", "/a/b"))
+  # Index and trailing-slash handling reach its clean_url only; the path
+  # column takes the collapse and the case fold (RURL-sudxboym).
+  expect_identical(s$path, c("/a/index.html", "/a/b/"))
+  expect_identical(s$clean_url, c("http://h.com/a", "http://h.com/a/b"))
 })
 
 test_that("a mixed call collapses by route, row by row", {

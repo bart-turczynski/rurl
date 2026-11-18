@@ -160,16 +160,24 @@ for (loc in names(ctypes)) {
       # cuts on those rows stay covered by NULL and whatwg.
       want_rfc <- want
       want_rfc[c(2L, 3L, 4L, 9L, 11L)] <- NA_character_
+      # The strip shapes clean_url only (ADR 0017 D2 row 6, RURL-sudxboym):
+      # the cut is read from clean_url's path, and get_path() and the path
+      # column stay the parsed path.
+      clean_path <- function(u) {
+        sub("^[A-Za-z][A-Za-z0-9+.-]*:(//[^/?#]*)?", "", u)
+      }
       for (std in list(NULL, "whatwg", "rfc3986")) {
         w <- if (identical(std, "rfc3986")) want_rfc else want
         expect_identical(get_path(url, index_page_handling = "strip",
-                                  url_standard = std), w,
+                                  url_standard = std),
+                         get_path(url, url_standard = std),
                          info = format(std))
-        expect_identical(
-          safe_parse_urls(url, index_page_handling = "strip",
-                          url_standard = std)$path,
-          w, info = format(std)
-        )
+        out <- safe_parse_urls(url, index_page_handling = "strip",
+                               url_standard = std)
+        expect_identical(out$path,
+                         safe_parse_urls(url, url_standard = std)$path,
+                         info = format(std))
+        expect_identical(clean_path(out$clean_url), w, info = format(std))
       }
     })
   })
