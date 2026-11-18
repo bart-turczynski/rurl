@@ -35,7 +35,7 @@ The `protocol_handling` argument controls only how the scheme is presented in
 `clean_url`; the `scheme` column and every other component report the parse:
 
 - `"keep"` (default; `clean_url` carries the parsed scheme, `http://` for a scheme-less host)
-- `"none"` (`clean_url` carries the input's own scheme, and none for a scheme-less host unless rurl reads a `host:port` form as scheme-bearing)
+- `"none"` (`clean_url` carries the input's own scheme, and none for a scheme-less host, a `host:port` form such as `example.com:8080` included)
 - `"strip"` (`clean_url` drops the scheme of an http or https URL; other schemes are kept)
 - `"http"` (`clean_url` presents an http or https URL as `http://`; other schemes are kept)
 - `"https"` (`clean_url` presents an http or https URL as `https://`; other schemes are kept)
