@@ -16,20 +16,30 @@ zwsp <- "\u200b"
 # The parsed path under one arm. `NULL` omits the selector, as the default call
 # does. Index-page and trailing-slash handling shape `clean_url` only, never
 # the path column (ADR 0017 D2 rows 5-6, RURL-sudxboym), so a call passing
-# either dial reads the path `clean_url` carries.
-arm_path <- function(url, arm, ...) {
-  res <- if (is.null(arm)) {
+# either dial reads the path `clean_url` carries, and also asserts that the
+# path column equals the undialled parse's.
+arm_parse <- function(url, arm, ...) {
+  if (is.null(arm)) {
     safe_parse_url(url, ...)
   } else {
     safe_parse_url(url, url_standard = arm, ...)
   }
+}
+
+arm_path <- function(url, arm, ...) {
+  res <- arm_parse(url, arm, ...)
   if (is.null(res)) {
     return(NULL)
   }
   dials <- c("index_page_handling", "trailing_slash_handling")
-  if (!any(dials %in% names(list(...)))) {
+  args <- list(...)
+  if (!any(dials %in% names(args))) {
     return(res$path)
   }
+  undialled <- do.call(arm_parse,
+                       c(list(url, arm), args[setdiff(names(args), dials)]))
+  testthat::expect_identical(res$path, undialled$path,
+                             label = sprintf("path column of %s", url))
   sub("^[A-Za-z][A-Za-z0-9+.-]*:(//[^/?#]*)?", "", res$clean_url)
 }
 
@@ -102,6 +112,21 @@ test_that("negative controls: paths with no mark, or a mark not first", {
       arm_path("file:/a/", arm, trailing_slash_handling = "strip"),
       no_clean(an, "/a"), label = an
     )
+    if (identical(an, "rfc3986")) {
+      # clean_url is NA there whatever the dials do, so the record carries
+      # the check: each dialled row keeps its undialled path column.
+      controls <- list(
+        list("file:/index.html", list(index_page_handling = "strip")),
+        list("file:/a/index.html", list(index_page_handling = "strip")),
+        list("file:/a/", list(trailing_slash_handling = "strip"))
+      )
+      for (ctl in controls) {
+        expect_identical(
+          do.call(arm_parse, c(list(ctl[[1]], arm), ctl[[2]]))$path,
+          arm_parse(ctl[[1]], arm)$path, label = ctl[[1]]
+        )
+      }
+    }
     expect_identical(
       arm_path("file:/\ufeff/a/index.html", arm,
                index_page_handling = "strip"),
