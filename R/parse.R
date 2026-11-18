@@ -3176,7 +3176,8 @@ safe_parse_urls <- function(url,
       gp_url <- clean_url[gp]
       drop <- scheme_dropped & !is.na(gp_url)
       gp_url[drop] <- substring(
-        gp_url[drop], nchar(gp_scheme[drop], type = "bytes") + 2L
+        gp_url[drop], nchar(gp_scheme[drop], type = "bytes") + 2L,
+        .Machine$integer.max
       )
       clean_url[gp] <- gp_url
     }
