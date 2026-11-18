@@ -191,7 +191,8 @@ on any profile), IDNA rendering, or query handling.}
 A character vector (format="string") or list (format="list"). In
 the string form a present but empty query (\verb{https://example.com/?}) is
 \code{""} and an absent one (\verb{https://example.com/}) is \code{NA}, as the WHATWG URL
-query state and RFC 3986 section 3.4 tell them apart; \code{query_handling = "drop"} gives \code{NA} for both. The list form gives an empty list for both.
+query state and RFC 3986 section 3.4 tell them apart; \code{query_handling = "drop"} gives \code{""} for any present query and \code{NA} for an absent one. The
+list form gives an empty list for both.
 The \code{query} column of \code{\link[=safe_parse_urls]{safe_parse_urls()}} stays \code{NA} for both (ADR 0012).
 }
 \description{

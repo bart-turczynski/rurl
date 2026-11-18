@@ -838,7 +838,8 @@ get_path <- function(
 #' the string form a present but empty query (`https://example.com/?`) is
 #' `""` and an absent one (`https://example.com/`) is `NA`, as the WHATWG URL
 #' query state and RFC 3986 section 3.4 tell them apart; `query_handling =
-#' "drop"` gives `NA` for both. The list form gives an empty list for both.
+#' "drop"` gives `""` for any present query and `NA` for an absent one. The
+#' list form gives an empty list for both.
 #' The `query` column of [safe_parse_urls()] stays `NA` for both (ADR 0012).
 #' @export
 #' @examples
@@ -950,9 +951,12 @@ get_query <- function(url,
       query[null_row] <- NA_character_
       probe <- which(is.na(query) & !null_row)
       if (length(probe) > 0L) {
+        # Lex each distinct input once, as the parse cache parses it once.
+        probed <- url[probe]
+        distinct <- unique(probed)
         kind <- .fsss_source_lex(
-          .prepare_url_input(url[probe])$url, url_standard
-        )$query_kind
+          .prepare_url_input(distinct)$url, url_standard
+        )$query_kind[match(probed, distinct)]
         query[probe[kind == "empty"]] <- ""
       }
       query
@@ -968,8 +972,8 @@ get_query <- function(url,
   vapply(
     raw,
     function(q) {
-      if (is.na(q)) {
-        NA_character_
+      if (is.na(q) || !nzchar(q)) {
+        q
       } else {
         tryCatch(.path_decode_readable_one(q), error = function(e) q)
       }
@@ -985,10 +989,9 @@ get_query <- function(url,
                                    empty_param_handling, decode_plus,
                                    scheme_policy, scheme_acceptance,
                                    url_standard) {
-  # A bare `?` reads as "" in the string form, except under "drop", which
-  # keeps its earlier NA there. The list form gives list() either way.
-  extract <- if (identical(format, "string") &&
-    !identical(query_handling, "drop")) {
+  # A bare `?` reads as "" in the string form, as any present query does
+  # under "drop". The list form gives list() either way.
+  extract <- if (identical(format, "string")) {
     .query_with_empty_presence
   } else {
     function(url, ...) .extract_from_urls(url, "query", ...)

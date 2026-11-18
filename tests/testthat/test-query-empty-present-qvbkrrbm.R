@@ -61,11 +61,15 @@ test_that("the filtering path reads an empty query as empty", {
         c("", NA), info = paste(std, dec)
       )
     }
-    # drop keeps its earlier result on a bare `?`.
-    expect_identical(
-      get_query(u, query_handling = "drop", url_standard = std),
-      c(NA_character_, NA_character_), info = std
-    )
+    # drop gives "" for any present query, a bare `?` included, and NA for
+    # an absent one.
+    for (dec in c(TRUE, FALSE)) {
+      expect_identical(
+        get_query(c("https://example.com/?a", u), query_handling = "drop",
+                  decode = dec, url_standard = std),
+        c("", "", NA), info = paste(std, dec)
+      )
+    }
     # A query emptied by filtering keeps its earlier result.
     expect_identical(
       get_query("https://example.com/?utm_source=x",
