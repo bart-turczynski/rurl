@@ -84,18 +84,13 @@ test_that("whatwg parse output nulls default ports under every port_handling", {
 test_that("port_handling = 'keep' agrees with get_port() under whatwg", {
   # The audit call (finding 9, RURL-eglhowqo).
   u <- "http://example.com:80/"
+  kept <- safe_parse_urls(u, url_standard = "whatwg", port_handling = "keep")
   expect_identical(
-    c(
-      safe_parse_urls(u, url_standard = "whatwg", port_handling = "keep")$port,
-      get_port(u, url_standard = "whatwg")
-    ),
+    c(kept$port, get_port(u, url_standard = "whatwg")),
     c(NA_integer_, NA_integer_)
   )
   # The dial still shapes clean_url: the input's port spelling survives there.
-  expect_identical(
-    safe_parse_urls(u, url_standard = "whatwg", port_handling = "keep")$clean_url,
-    "http://example.com:80/"
-  )
+  expect_identical(kept$clean_url, "http://example.com:80/")
   # Control: without the dial, :80 is null and :8080 is kept.
   expect_identical(
     safe_parse_urls(

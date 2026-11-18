@@ -90,6 +90,7 @@
 - `protocol_handling` now shapes only the scheme in `clean_url`, and `"strip"`, `"http"` and `"https"` act only on http(s) URLs; every other column reports the parse (WHATWG URL, scheme state; RFC 3986 §3) (`RURL-uxkksgtu`).
 - `protocol_handling = "none"` no longer adds `http://` to a scheme-less `host:port` input such as `example.com:8080/a` in `clean_url` (WHATWG URL, scheme state) (`RURL-ndwnalfe`).
 - `trailing_slash_handling` and `index_page_handling` now shape only `clean_url`; the `path` column and `get_path()` keep the parsed path (WHATWG URL, path state; RFC 3986 §6.2.3) (`RURL-sudxboym`).
+- Under `url_standard = "whatwg"`, `port_handling = "keep"` shapes only `clean_url`; the `port` column stays `NA` for a default port, as `get_port()` reports (WHATWG URL, port state) (`RURL-eglhowqo`).
 
 ### Deprecated
 

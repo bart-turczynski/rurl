@@ -314,9 +314,11 @@ behavior. This knob is standalone and standard-independent (editorial, like
 \itemize{
 \item{"exclude": (Default) The port never appears in \code{clean_url}.}
 \item{"strip_all": Explicit alias of "exclude".}
-\item{"keep": Include the syntactic port when present, including a
-default port under \code{url_standard = "whatwg"}. This is an explicit
-non-parity override for callers that need the input's port spelling.}
+\item{"keep": Include the syntactic port in \code{clean_url} when present,
+including a default port under \code{url_standard = "whatwg"}, for callers
+that need the input's port spelling. It shapes \code{clean_url} only: under
+\code{"whatwg"} the \code{port} column stays \code{NA} for a default port (WHATWG URL
+Standard, port state), as \code{\link[=get_port]{get_port()}} reports.}
 \item{"strip_default": Keep only non-default ports (using the same
 scheme-default table), independent of \code{url_standard}. Default-ness is
 judged on the scheme the input was \strong{parsed} with, never on the scheme
