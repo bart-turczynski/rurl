@@ -151,7 +151,10 @@ test_that("a 2e5-character local part or domain is split in linear time", {
       r <- get_mailto_recipients(u, scheme_acceptance = "general")
     )[["elapsed"]]
     setTimeLimit(elapsed = Inf)
-    expect_lt(elapsed, 2, label = substr(u, 1, 12))
+    # The linear split takes about 0.4-0.6 s here on an idle host, but a
+    # loaded gate stretched it past 2 s (RURL-oeaeitwb). 10 s keeps the
+    # bound far below the quadratic minutes and leaves headroom for load.
+    expect_lt(elapsed, 10, label = substr(u, 1, 12))
     expect_identical(nrow(r), 1L)
   }
 })
