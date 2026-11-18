@@ -248,3 +248,76 @@ test_that("\"strip\" moves only http and https rows over the corpora", {
     }
   }
 })
+
+# The general route serializes some http(s) rows (an RFC hostless `http:`).
+# Under "strip" their `scheme:` prefix comes off after serialization; where
+# what is left would read as a scheme, RFC 3986 section 4.2's "./" guards it.
+strip_general_rfc <- function(x, ph = "strip") {
+  safe_parse_urls(x, url_standard = "rfc3986", scheme_acceptance = "general",
+                  protocol_handling = ph)$clean_url
+}
+
+test_that("\"strip\" cuts exactly the scheme off a general http(s) row", {
+  expect_identical(strip_general_rfc("http:foo"), "foo")
+  keep <- strip_general_rfc("HTTP:/A", "keep")
+  expect_identical(strip_general_rfc("HTTP:/A"),
+                   sub("^[A-Za-z][A-Za-z0-9+.-]*:", "", keep))
+  # Current shapes, recorded as they are.
+  expect_identical(strip_general_rfc(c("http:///p", "http://", "http:")),
+                   c("///p", "//", ""))
+})
+
+test_that("\"strip\" never leaves a general http(s) row reading as a scheme", {
+  x <- c("http:javascript:alert(1)", "http:mailto:x@y.com", "https:a:b")
+  out <- safe_parse_urls(x, url_standard = "rfc3986",
+                         scheme_acceptance = "general",
+                         protocol_handling = "strip")
+  expect_identical(out$parse_status, c("ok", "ok", "ok"))
+  expect_identical(out$clean_url,
+                   c("./javascript:alert(1)", "./mailto:x@y.com", "./a:b"))
+})
+
+test_that("\"strip\" general http(s) rows are keep minus the scheme", {
+  skip_if_not_installed("jsonlite")
+  ext_path <- testthat::test_path("fixtures", "external-url-vectors.csv")
+  txt <- rawToChar(readBin(ext_path, "raw", file.size(ext_path)))
+  Encoding(txt) <- "UTF-8"
+  fx <- utils::read.csv(
+    text = txt, stringsAsFactors = FALSE, colClasses = "character",
+    na.strings = "NA", encoding = "UTF-8"
+  )
+  ext <- vapply(fx$input_json[fx$runnable == "yes"], jsonlite::fromJSON,
+                character(1), USE.NAMES = FALSE)
+  x <- unique(c(parse_corpus_urls(), ext,
+                "http:foo", "HTTP:/A", "http:javascript:alert(1)", "https:a:b"))
+  for (std in c("whatwg", "rfc3986")) {
+    keep <- safe_parse_urls(x, url_standard = std,
+                            scheme_acceptance = "general")
+    got <- safe_parse_urls(x, url_standard = std,
+                           scheme_acceptance = "general",
+                           protocol_handling = "strip")
+    # Every http(s) row: the web builder drops `scheme://`, the general
+    # serializer's output loses `scheme:` (with the section 4.2 "./" guard).
+    web <- !is.na(keep$scheme) & keep$scheme %in% c("http", "https") &
+      !is.na(keep$clean_url)
+    pre <- paste0(keep$scheme[web], ":")
+    expect_true(all(startsWith(keep$clean_url[web], pre)), info = std)
+    rest <- substring(keep$clean_url[web], nchar(pre) + 1L,
+                      .Machine$integer.max)
+    guard <- grepl("^[^/?#]*:", rest)
+    general_form <- rest
+    general_form[guard] <- sprintf("./%s", rest[guard])
+    # The web builder's form exists only where an authority follows.
+    special_form <- rep(NA_character_, length(rest))
+    auth <- startsWith(rest, "//")
+    special_form[auth] <- substring(rest[auth], 3L, .Machine$integer.max)
+    ok <- got$clean_url[web] == general_form |
+      (!is.na(special_form) & got$clean_url[web] == special_form)
+    expect_true(all(!is.na(ok) & ok), info = std)
+    # Under rfc3986 the general form occurs, so the check is not vacuous.
+    if (std == "rfc3986") {
+      expect_true(any(got$clean_url[web] == general_form &
+                        (is.na(special_form) | general_form != special_form)))
+    }
+  }
+})

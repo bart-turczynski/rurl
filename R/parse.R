@@ -3179,6 +3179,12 @@ safe_parse_urls <- function(url,
         gp_url[drop], nchar(gp_scheme[drop], type = "bytes") + 2L,
         .Machine$integer.max
       )
+      # RFC 3986 sec 4.2: a relative reference whose first path segment holds
+      # a ":" reads as a scheme (`http:javascript:alert(1)` would present as
+      # `javascript:alert(1)`), so it takes the section's "./" prefix.
+      colon_seg <- drop
+      colon_seg[drop] <- .bytes_detect(gp_url[drop], "^[^/?#]*:")
+      gp_url[colon_seg] <- sprintf("./%s", gp_url[colon_seg])
       clean_url[gp] <- gp_url
     }
   }
