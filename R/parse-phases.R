@@ -2189,16 +2189,23 @@
   unlist(out, use.names = FALSE)
 }
 
-# Phase 4 (vector): resolve the final scheme according to protocol policy.
+# Phase 4 (vector): the scheme `clean_url` PRESENTS under protocol policy
+# (ADR 0010: the dial answers only how the scheme is presented in clean_url).
+# It is never the parsed scheme: the `scheme` column, the verdicts and every
+# Stage-B classifier read `raw_scheme` (RURL-uxkksgtu). "http"/"https" rewrite
+# only a row the parse read as http or https: a forced web scheme is not a
+# license to rewrite an arbitrary admitted scheme (ADR 0012), and
+# `mailto:user@example.com` must never present as an https URL.
 .derive_final_scheme_vec <- function(protocol_handling,
                                      looks_like_protocol,
                                      raw_scheme) {
   n <- length(looks_like_protocol)
+  web <- !is.na(raw_scheme) & .ascii_tolower(raw_scheme) %in% c("http", "https")
   switch(protocol_handling,
     none = ifelse(looks_like_protocol, raw_scheme, NA_character_),
     strip = rep(NA_character_, n),
-    http = rep("http", n),
-    https = rep("https", n),
+    http = ifelse(web, "http", raw_scheme),
+    https = ifelse(web, "https", raw_scheme),
     keep = raw_scheme
   )
 }

@@ -557,6 +557,11 @@ get_domain <- function(url,
 #' yields \code{NA}. Pass \code{scheme_acceptance = "general"} (which requires
 #' an explicit \code{url_standard}) to run the general parser, under which those
 #' schemes resolve and their scheme string is returned.
+#'
+#' The result is always the parsed scheme. \code{protocol_handling} only
+#' changes how \code{clean_url} presents the scheme, so it no longer moves
+#' this component: \code{get_scheme("ftp://h/x", protocol_handling = "https")}
+#' is \code{"ftp"}, and a scheme-less host is \code{"http"} under every value.
 #' @export
 #' @examples
 #' get_scheme("https://example.com")

@@ -21,7 +21,7 @@ test_that("a mailto: row under protocol_handling = \"https\" stays mailto:", {
   expect_identical(out$clean_url, "mailto:user@example.com")
 })
 
-test_that("get_scheme() returns the parsed scheme under every protocol_handling", {
+test_that("get_scheme() returns the parsed scheme under any dial value", {
   expect_identical(
     get_scheme("ftp://h/x", protocol_handling = "https",
                url_standard = "whatwg"),
@@ -40,7 +40,7 @@ test_that("get_scheme() returns the parsed scheme under every protocol_handling"
   expect_identical(get_scheme("x.com", protocol_handling = "http"), "http")
 })
 
-test_that("protocol_handling = \"strip\" keeps the scheme and the file: host rule", {
+test_that("\"strip\" keeps the scheme column and the file: host rule", {
   out <- safe_parse_urls(
     c("HTTP://EXAMPLE.COM/", "file://localhost/x"),
     url_standard = "whatwg", protocol_handling = "strip"
@@ -92,7 +92,8 @@ test_that("http/https presentation still applies to http and https rows", {
     https$clean_url,
     c("https://example.com/a", "https://example.com/a",
       "https://example.com/a", "ftp://example.com/a",
-      "mailto://h.example:8080/p")
+      # The surface default `port_handling = "exclude"` drops the port.
+      "mailto://h.example/p")
   )
   expect_identical(https$scheme, c("http", "https", "http", "ftp", "mailto"))
   # The explicit `//` authority of a mailto: row is a real host, not masked.
@@ -116,7 +117,7 @@ test_that("the seo bundle's clean_url is unchanged for http and https input", {
   )
 })
 
-test_that("edge inputs keep the keep-row record under every protocol_handling", {
+test_that("edge inputs keep the keep-row record under every value", {
   x <- c("example.com", "//host.example/p", "HTTP://Example.com/a",
          "mailto://h.example:8080/p", NA, "", "ws://example.com/")
   for (sa in c("web", "general")) {

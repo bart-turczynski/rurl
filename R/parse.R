@@ -9,8 +9,10 @@
 #'
 #' @param url A single URL string to be parsed. For vectors, use
 #'   \code{\link{safe_parse_urls}}.
-#' @param protocol_handling A character string specifying how to handle
-#'   protocols. Defaults to "keep".
+#' @param protocol_handling A character string specifying how the scheme is
+#'   presented in \code{clean_url}. Defaults to "keep". It changes nothing
+#'   else: the \code{scheme} column, \code{get_scheme()}, the other components
+#'   and \code{parse_status} always report the parse of the input (ADR 0010).
 #'   Regardless of this option, rurl only processes authority-based URLs whose
 #'   scheme is one of http, https, ftp, or ftps; a scheme-bearing input with any
 #'   other scheme (e.g. \code{mailto:}, \code{tel:}, \code{ws:}) yields
@@ -21,15 +23,16 @@
 #'   \code{"192.168.010.1"}) is rejected as \code{"error"} rather than having a
 #'   scheme fabricated for it.
 #'   \itemize{
-#'     \item{"keep": If a supported scheme exists (http, https, ftp, ftps), it's
-#'     used. If no scheme and the input is host-shaped, "http://" is added;
-#'     otherwise the input is not a URL and yields \code{"error"}.}
-#'     \item{"none": If a supported scheme exists, it's used. If no scheme, then
-#'     no scheme is used (scheme component will be NA).}
-#'     \item{"strip": Any existing scheme is removed (scheme component will be
-#'     NA).}
-#'     \item{"http": The scheme is forced to be "http".}
-#'     \item{"https": The scheme is forced to be "https".}
+#'     \item{"keep": \code{clean_url} carries the parsed scheme. A scheme-less
+#'     host-shaped input parses as "http://"; any other scheme-less input is
+#'     not a URL and yields \code{"error"}.}
+#'     \item{"none": \code{clean_url} carries the input's own scheme, and
+#'     none for a scheme-less input.}
+#'     \item{"strip": \code{clean_url} carries no scheme.}
+#'     \item{"http": \code{clean_url} presents an http or https URL as
+#'     "http"; any other scheme (\code{ftp:}, \code{mailto:}) is kept.}
+#'     \item{"https": \code{clean_url} presents an http or https URL as
+#'     "https"; any other scheme is kept.}
 #'   }
 #' @param www_handling A character string specifying how to handle "www"
 #'   and `www[number]` prefixes in the host. Defaults to "none".
@@ -2234,17 +2237,19 @@ safe_parse_urls <- function(url,
 }
 
 # The scheme as the prepared input SPELLS it, for the rows where that token is
-# the scheme the parse settled on (RURL-gkmwqpos, RUL-007). `final_scheme` is
+# the scheme the parse settled on (RURL-gkmwqpos, RUL-007). `raw_scheme` is
 # the ASCII-lowercased classification token; this is its source spelling,
 # which RFC 3986 sec 6.2.2.1 treats as un-normalized and which only
-# `serialize_url(form = "source")` renders. Falls back to `final_scheme` where
+# `serialize_url(form = "source")` renders. Falls back to `raw_scheme` where
 # the prepared input carries no scheme token, where the token differs from the
 # settled scheme other than by case (a fabricated `http://` prefix over a
-# host-port input, a scheme-relative rewrite), or where `final_scheme` is NA --
-# so the spelling can never name a scheme the parse did not find.
-.source_scheme_spelling_vec <- function(prepared, final_scheme) {
-  out <- final_scheme
-  ok <- !is.na(final_scheme) & !is.na(prepared)
+# host-port input, a scheme-relative rewrite), or where `raw_scheme` is NA --
+# so the spelling can never name a scheme the parse did not find. It is
+# handed the PARSED scheme, never the one `protocol_handling` presents
+# (RURL-uxkksgtu).
+.source_scheme_spelling_vec <- function(prepared, raw_scheme) {
+  out <- raw_scheme
+  ok <- !is.na(raw_scheme) & !is.na(prepared)
   if (!any(ok)) {
     return(out)
   }
@@ -2252,7 +2257,7 @@ safe_parse_urls <- function(url,
   # ICU did, and a leading U+FEFF, which stringi read past, is data that no
   # scheme starts with.
   token <- .bytes_capture(prepared[ok], "^([A-Za-z][A-Za-z0-9+.\\-]*):")[, 2L]
-  same <- !is.na(token) & .ascii_tolower(token) == final_scheme[ok]
+  same <- !is.na(token) & .ascii_tolower(token) == raw_scheme[ok]
   idx <- which(ok)[same]
   out[idx] <- token[same]
   out
@@ -2631,22 +2636,24 @@ safe_parse_urls <- function(url,
   # downstream consumers (`pslr`, `punycoder::host_normalize()`).
   raw_host <- .mark_host_utf8(raw_host)
 
-  # Phase 4: final scheme per protocol policy.
+  # Phase 4: the scheme clean_url presents, per protocol policy. It is
+  # presentation only (ADR 0010, RURL-uxkksgtu): the record, the verdicts and
+  # every classifier read `raw_scheme`, the scheme the parse settled on.
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
   )
   # The scheme AS SPELLED (RURL-gkmwqpos, RUL-007). Every route ASCII-lowercases
   # `raw_scheme` -- the web parser at its scheme production, the general parser
   # in `.general_parse_vec()` -- and every classifier downstream keys off that
-  # folded token, so `final_scheme` keeps it. But RFC 3986 sec 6.2.2.1 makes
+  # folded token, so `raw_scheme` keeps it. But RFC 3986 sec 6.2.2.1 makes
   # scheme case folding a NORMALIZATION, which `serialize_url(form = "source")`
   # must not apply; it reads the spelling back from here, the same way the
   # host's source spelling is carried since RURL-xkhbhaje. Read off the
   # prepared input, and only where the token there IS the scheme the parse
   # settled on (a fabricated `http://` prefix or a demoted token falls back to
-  # `final_scheme`), so a disagreeing pair never emits a scheme the parse did
+  # `raw_scheme`), so a disagreeing pair never emits a scheme the parse did
   # not find.
-  source_scheme <- .source_scheme_spelling_vec(prep$url_to_parse, final_scheme)
+  source_scheme <- .source_scheme_spelling_vec(prep$url_to_parse, raw_scheme)
 
   # Phase 5: IP host detection (on the parsed host, which may be a coerced
   # IPv4).
@@ -2821,7 +2828,9 @@ safe_parse_urls <- function(url,
   # slice. This block gates only Stage-B path/host/query transforms.
   general_acceptance <- identical(opts$scheme_acceptance, "general")
   if (general_acceptance) {
-    scheme_lc <- .ascii_tolower(a$final_scheme)
+    # Eligibility is a fact about the PARSED scheme (RURL-uxkksgtu): the
+    # scheme `protocol_handling` presents only reaches clean_url.
+    scheme_lc <- .ascii_tolower(a$raw_scheme)
     is_special_row <- !is.na(scheme_lc) & scheme_lc %in% .WHATWG_SPECIAL_SCHEMES
     # ADR 0012 Layer 4b-2 (RURL-qbnelzku): re-run the pure general parser on the
     # original URL to recover the state kinds Stage A did not thread through the
@@ -2848,7 +2857,7 @@ safe_parse_urls <- function(url,
       hk[gp] <- gen_b$host_kind[gp]
     }
     elig <- .stage_b_eligibility(
-      "general", a$final_scheme, opts$url_standard,
+      "general", a$raw_scheme, opts$url_standard,
       path_kind = pk, host_kind = hk, is_ip_host = is_ip_host
     )
   }
@@ -2915,10 +2924,15 @@ safe_parse_urls <- function(url,
     host_for_clean[revert] <- final_host[revert]
   }
 
-  # Phase 10: case policy applied to host, path, and scheme.
+  # Phase 10: case policy applied to host, path, and scheme. The record's
+  # scheme is the PARSED one; the scheme `protocol_handling` presents is cased
+  # the same way and enters clean_url only (ADR 0010, RURL-uxkksgtu).
   cased <- .apply_case_policy_vec(
-    host_for_clean, path_final, a$final_scheme, opts$case_handling
+    host_for_clean, path_final, a$raw_scheme, opts$case_handling
   )
+  presented_scheme <- .apply_case_policy_vec(
+    NA_character_, NA_character_, a$final_scheme, opts$case_handling
+  )$scheme
   # D2 case split: SCHEME lowercasing is standards-required and ALWAYS applied
   # (cased$scheme kept). The host case fold is gated on host_transform_eligible
   # (a non-special opaque host is not lowercased); the path case fold is gated
@@ -2941,6 +2955,7 @@ safe_parse_urls <- function(url,
   # (no other row can change). The case fold runs on the projection exactly
   # as Phase 10 would, with the same eligibility reverts.
   clean_cased <- cased
+  clean_cased$scheme <- presented_scheme
   if (length(opts$clean_only) > 0L) {
     clean_path <- path_final
     collapse <- rep(FALSE, length(clean_path))
@@ -3006,13 +3021,15 @@ safe_parse_urls <- function(url,
   # RUL-016: default-ness is judged on the PARSED scheme. `a$final_scheme` is
   # already `https` under `protocol_handling = "https"`, which nulled a real
   # `http://host:443` port and resurrected an `http://host:80` one the WHATWG
-  # record holds as null.
+  # record holds as null. The query encode set is the parsed scheme's too: a
+  # `foo:` query gained the special-query `'` escape under "https"
+  # (RURL-uxkksgtu).
   port_output <- .apply_port_output_policy_vec(
     a$raw_scheme, a$raw_port, opts$port_handling, opts$url_standard
   )
   if (.is_whatwg(opts$url_standard)) {
     query_output <- .whatwg_query_percent_encode(
-      query_output, a$final_scheme
+      query_output, a$raw_scheme
     )
     fragment_output <- .whatwg_fragment_percent_encode(fragment_output)
   }
@@ -3158,7 +3175,9 @@ safe_parse_urls <- function(url,
     tld = tld,
     domain = domain,
     protocol_handling = opts$protocol_handling,
-    final_scheme = a$final_scheme,
+    # The PARSED scheme (RURL-uxkksgtu): `file:`'s optional host and the
+    # ftp: admission are facts about the input, not about its presentation.
+    final_scheme = a$raw_scheme,
     looks_like_protocol = a$looks_like_protocol,
     original_has_allowed_scheme = a$original_has_allowed_scheme,
     looks_like_host_port = a$looks_like_host_port,
@@ -3301,7 +3320,8 @@ safe_parse_urls <- function(url,
     trailing_slash_handling = trailing_slash_handling
   )
 
-  # Phase 4: final scheme per protocol policy
+  # Phase 4: the scheme clean_url presents, per protocol policy (ADR 0010;
+  # presentation only, RURL-uxkksgtu)
   final_scheme <- .derive_final_scheme(
     protocol_handling, prep$looks_like_protocol, raw$scheme
   )
@@ -3349,17 +3369,21 @@ safe_parse_urls <- function(url,
     final_host, host_encoding, is_ip_host, url_standard
   )
 
-  # Phase 10: case policy applied to host, path, and scheme
+  # Phase 10: case policy applied to host, path, and scheme. The record keeps
+  # the PARSED scheme; the presented one enters clean_url only.
   cased <- .apply_case_policy(
-    host_for_clean, path_final, final_scheme, case_handling
+    host_for_clean, path_final, raw$scheme, case_handling
   )
   host_output <- cased$host
   path_output <- cased$path
   scheme_output <- cased$scheme
+  presented_scheme <- .apply_case_policy(
+    NA_character_, NA_character_, final_scheme, case_handling
+  )$scheme
 
   # Phase 11: clean URL reconstruction
   clean_url <- .build_clean_url(
-    scheme_output, host_output, path_output, trailing_slash_handling
+    presented_scheme, host_output, path_output, trailing_slash_handling
   )
 
   # Phase 12: parse-status assignment
@@ -3370,7 +3394,7 @@ safe_parse_urls <- function(url,
     tld = tld,
     domain = domain,
     protocol_handling = protocol_handling,
-    final_scheme = final_scheme,
+    final_scheme = raw$scheme,
     looks_like_protocol = prep$looks_like_protocol,
     original_has_allowed_scheme = prep$original_has_allowed_scheme,
     looks_like_host_port = prep$looks_like_host_port,

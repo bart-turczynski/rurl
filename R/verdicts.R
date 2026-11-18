@@ -75,6 +75,13 @@
 #
 # Returns a columnar list: `layer1_syntax_verdict`, `layer2_policy_verdict`,
 # `layer3_annotation_state`, and the private `layer3_detail`.
+#
+# `final_scheme` is the scheme the PARSE settled on, never the one
+# `protocol_handling` presents in clean_url (ADR 0010, RURL-uxkksgtu): every
+# caller hands it the Stage-A `raw_scheme`. `protocol_handling` is accepted for
+# the callers' signature and decides nothing here: under "strip" a
+# `file://localhost/x` row lost its optional host and failed, and an ftp: row
+# lost `admitted-ftp`.
 .derive_verdict_layers_vec <- function(web_ok, final_host, is_ip_host, tld,
                                        domain, protocol_handling, final_scheme,
                                        looks_like_protocol,
@@ -117,11 +124,11 @@
   # §2). The shipped behavior -- an FTP host with no registrable domain reports
   # the PSL warning, not `ok-ftp` -- is reproduced by pi's row ORDER instead,
   # which considers the L3 warnings (rows 4-6) before `admitted-ftp` (row 8).
-  if (!identical(protocol_handling, "strip")) {
-    is_ftp <- host_present & !is.na(scheme_lower) &
-      scheme_lower %in% c("ftp", "ftps")
-    layer2[is_ftp] <- "admitted-ftp"
-  }
+  # Not gated on `protocol_handling` (RURL-uxkksgtu): admission reads the
+  # parse, and presentation never decides it.
+  is_ftp <- host_present & !is.na(scheme_lower) &
+    scheme_lower %in% c("ftp", "ftps")
+  layer2[is_ftp] <- "admitted-ftp"
 
   # Scheme-relative retention (shipped `ok-scheme-relative`). Same treatment:
   # unconditional here, ordered in pi (row 7).
