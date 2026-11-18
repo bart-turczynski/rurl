@@ -110,10 +110,13 @@ test_that("get_domain works with subdomains", {
   expect_equal(unname(get_domain("http://localhost")), NA_character_)
 })
 
-test_that("get_scheme respects protocol_handling", {
+test_that("get_scheme returns the parsed scheme under any protocol_handling", {
+  # protocol_handling only presents the scheme in clean_url (ADR 0010,
+  # RURL-uxkksgtu): a scheme-less host parses as http under every value.
   expect_equal(unname(get_scheme("https://x.com")), "https")
   expect_equal(unname(get_scheme("x.com", "http")), "http")
-  expect_equal(unname(get_scheme("x.com", "none")), NA_character_)
+  expect_equal(unname(get_scheme("x.com", "none")), "http")
+  expect_equal(unname(get_scheme("http://x.com", "https")), "http")
 })
 
 test_that("get_parse_status returns 'ok' or 'error'", {
