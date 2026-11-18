@@ -905,7 +905,7 @@ get_query <- function(url,
                                  scheme_policy, scheme_acceptance,
                                  url_standard) {
   if (identical(format, "string")) {
-    raw <- .extract_from_urls(url, "query",
+    raw <- .query_with_empty_presence(url,
       protocol_handling = protocol_handling,
       scheme_policy = scheme_policy,
       scheme_acceptance = scheme_acceptance,
@@ -925,6 +925,35 @@ get_query <- function(url,
     url_standard = url_standard
   )
   lapply(raw, ._parse_query_string, decode = decode)
+}
+
+# The `query` column with a present but empty query read back as "" (the
+# WHATWG URL query state sets the query to "" on `?`; RFC 3986 sections 3.4
+# and 5.3 define the component whenever `?` is present). Stage A collapses ""
+# to NA through .blank_to_na(), so the column cannot tell `http://h/?` from
+# `http://h/`. The delimiter is recovered lexically, the way serialize_url()
+# recovers it (.fsss_source_lex(), which applies the WHATWG strips under
+# "whatwg" and reads a `?` after `#` as fragment), and only on the rows that
+# parsed and carry no query, so a row that failed to parse stays NA. The
+# record's own `query` column keeps NA for both (ADR 0012 D2).
+.query_with_empty_presence <- function(url, url_standard, ...) {
+  .extract_from_urls(url, NULL,
+    transform = function(cols) {
+      query <- cols[["query"]]
+      null_row <- attr(cols, "null_row")
+      query[null_row] <- NA_character_
+      probe <- which(is.na(query) & !null_row)
+      if (length(probe) > 0L) {
+        kind <- .fsss_source_lex(
+          .prepare_url_input(url[probe])$url, url_standard
+        )$query_kind
+        query[probe[kind == "empty"]] <- ""
+      }
+      query
+    },
+    url_standard = url_standard,
+    ...
+  )
 }
 
 # The default decode: the RURL-eokizmdi rule (.path_decode_readable_one()), so
@@ -950,7 +979,15 @@ get_query <- function(url,
                                    empty_param_handling, decode_plus,
                                    scheme_policy, scheme_acceptance,
                                    url_standard) {
-  raw <- .extract_from_urls(url, "query",
+  # A bare `?` reads as "" in the string form, except under "drop", which
+  # keeps its earlier NA there. The list form gives list() either way.
+  extract <- if (identical(format, "string") &&
+    !identical(query_handling, "drop")) {
+    .query_with_empty_presence
+  } else {
+    function(url, ...) .extract_from_urls(url, "query", ...)
+  }
+  raw <- extract(url,
     protocol_handling = protocol_handling,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
