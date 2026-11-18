@@ -370,8 +370,10 @@
 .spu_stage_a_fields <- list(
   # The scheme clean_url PRESENTS under `protocol_handling` (ADR 0010). It
   # reaches clean_url assembly and nothing else (RURL-uxkksgtu): the record,
-  # the verdicts and every classifier read `raw_scheme`. Cached because the
-  # Stage-A key already carries `protocol_handling`.
+  # the verdicts and every parse-path classifier read `raw_scheme`; the
+  # diagnostics and serialize seams read this field but always run with
+  # protocol_handling = "keep", where it equals `raw_scheme`. Cached because
+  # the Stage-A key already carries `protocol_handling`.
   list(name = "final_scheme", default = NA_character_, template = character(1)),
   # The scheme as the source SPELLED it (RURL-gkmwqpos, RUL-007): `raw_scheme`
   # is the ASCII-lowercased classification token every route produces, and RFC

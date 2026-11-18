@@ -180,3 +180,71 @@ test_that("only clean_url moves with protocol_handling over the corpora", {
     }
   }
 })
+
+# "strip" drops the scheme of an http or https row only, as "http"/"https"
+# rewrite only those rows: every other admitted scheme keeps its own scheme in
+# clean_url, so no serializer is handed an NA scheme (ADR 0017 D2 row 2).
+test_that("\"strip\" keeps a file: row's clean_url", {
+  x <- c("file://localhost/x", "file:///C:/x")
+  for (std in c("whatwg", "rfc3986")) {
+    keep <- safe_parse_urls(x, url_standard = std, protocol_handling = "keep")
+    got <- safe_parse_urls(x, url_standard = std, protocol_handling = "strip")
+    expect_identical(got$clean_url, keep$clean_url, info = std)
+    expect_false(anyNA(got$clean_url[got$parse_status != "error"]),
+                 info = std)
+  }
+  expect_identical(
+    safe_parse_urls(x, url_standard = "whatwg",
+                    protocol_handling = "strip")$clean_url,
+    c("file:///x", "file:///C:/x")
+  )
+})
+
+test_that("\"strip\" never renders a general row's scheme as NA", {
+  x <- c("foo:/a?b'c", "foo://h.com/p", "mailto:user@example.com", "tel:+1",
+         "file://localhost/x")
+  for (std in c("whatwg", "rfc3986")) {
+    keep <- safe_parse_urls(x, url_standard = std,
+                            scheme_acceptance = "general",
+                            protocol_handling = "keep")
+    got <- safe_parse_urls(x, url_standard = std,
+                           scheme_acceptance = "general",
+                           protocol_handling = "strip")
+    expect_identical(got$clean_url, keep$clean_url, info = std)
+  }
+})
+
+test_that("\"strip\" moves only http and https rows over the corpora", {
+  skip_if_not_installed("jsonlite")
+  ext_path <- testthat::test_path("fixtures", "external-url-vectors.csv")
+  txt <- rawToChar(readBin(ext_path, "raw", file.size(ext_path)))
+  Encoding(txt) <- "UTF-8"
+  fx <- utils::read.csv(
+    text = txt, stringsAsFactors = FALSE, colClasses = "character",
+    na.strings = "NA", encoding = "UTF-8"
+  )
+  ext <- vapply(fx$input_json[fx$runnable == "yes"], jsonlite::fromJSON,
+                character(1), USE.NAMES = FALSE)
+  x <- unique(c(parse_corpus_urls(), ext))
+  input_has_na <- !is.na(x) & grepl("NA:", x, fixed = TRUE)
+  for (std in c("whatwg", "rfc3986")) {
+    for (sa in c("web", "general")) {
+      keep <- safe_parse_urls(x, url_standard = std, scheme_acceptance = sa)
+      # A scheme-relative row reports scheme NA but presents a web scheme,
+      # so only a row with a parsed non-web scheme is held to its keep value.
+      other <- !is.na(keep$scheme) & !(keep$scheme %in% c("http", "https"))
+      for (ph in c("none", "strip", "http", "https")) {
+        got <- safe_parse_urls(x, url_standard = std, scheme_acceptance = sa,
+                               protocol_handling = ph)
+        has_na <- !is.na(got$clean_url) &
+          grepl("NA:", got$clean_url, fixed = TRUE)
+        expect_false(any(has_na & !input_has_na),
+                     info = paste(std, sa, ph))
+        if (ph != "none") {
+          expect_identical(got$clean_url[other], keep$clean_url[other],
+                           info = paste(std, sa, ph))
+        }
+      }
+    }
+  }
+})

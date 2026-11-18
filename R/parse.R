@@ -27,8 +27,11 @@
 #'     host-shaped input parses as "http://"; any other scheme-less input is
 #'     not a URL and yields \code{"error"}.}
 #'     \item{"none": \code{clean_url} carries the input's own scheme, and
-#'     none for a scheme-less input.}
-#'     \item{"strip": \code{clean_url} carries no scheme.}
+#'     no scheme for a scheme-less host, except where rurl reads the input as
+#'     scheme-bearing (a \code{host:port} form gets "http").}
+#'     \item{"strip": \code{clean_url} drops the scheme of an http or https
+#'     URL; any other scheme (\code{ftp:}, \code{file:}, \code{mailto:}) is
+#'     kept.}
 #'     \item{"http": \code{clean_url} presents an http or https URL as
 #'     "http"; any other scheme (\code{ftp:}, \code{mailto:}) is kept.}
 #'     \item{"https": \code{clean_url} presents an http or https URL as
@@ -2638,7 +2641,8 @@ safe_parse_urls <- function(url,
 
   # Phase 4: the scheme clean_url presents, per protocol policy. It is
   # presentation only (ADR 0010, RURL-uxkksgtu): the record, the verdicts and
-  # every classifier read `raw_scheme`, the scheme the parse settled on.
+  # every parse-path classifier read `raw_scheme`, the scheme the parse settled
+  # on (diagnostics and serialize run with protocol_handling = "keep").
   final_scheme <- .derive_final_scheme_vec(
     opts$protocol_handling, prep$looks_like_protocol, raw_scheme
   )
@@ -3089,6 +3093,14 @@ safe_parse_urls <- function(url,
   # `path_normalization` leaves). web/special rows keep
   # `.build_clean_url_vec` verbatim; under "web" `gp` is empty (passthrough).
   if (general_acceptance && any(gp)) {
+    # An http(s) row the general route serializes (an RFC hostless `http:`)
+    # may have its scheme stripped. The serializers cannot take an NA scheme
+    # (they rendered it as the text "NA:"), so they get the parsed scheme and
+    # its `scheme:` prefix comes off afterwards (RURL-uxkksgtu). "strip" never
+    # drops a non-web scheme, so only http(s) rows reach this.
+    gp_scheme <- clean_cased$scheme[gp]
+    scheme_dropped <- is.na(gp_scheme) & !is.na(cased$scheme[gp])
+    gp_scheme[scheme_dropped] <- cased$scheme[gp][scheme_dropped]
     if (.is_whatwg(opts$url_standard)) {
       # The WHATWG path state removes `.` and `..` segments (and their `%2e`
       # spellings) from every list path while parsing; an opaque path is
@@ -3109,7 +3121,7 @@ safe_parse_urls <- function(url,
         )
       }
       clean_url[gp] <- .serialize_whatwg_vec(
-        scheme = clean_cased$scheme[gp], host = gen_b$host[gp],
+        scheme = gp_scheme, host = gen_b$host[gp],
         host_kind = gen_b$host_kind[gp],
         authority_delimiter_present =
           gen_b$authority_delimiter_present[gp],
@@ -3149,7 +3161,7 @@ safe_parse_urls <- function(url,
         rfc_path <- dotless
       }
       clean_url[gp] <- .serialize_rfc_generic_vec(
-        scheme = clean_cased$scheme[gp], host = gen_b$host[gp],
+        scheme = gp_scheme, host = gen_b$host[gp],
         host_kind = gen_b$host_kind[gp],
         authority_delimiter_present =
           gen_b$authority_delimiter_present[gp],
@@ -3159,6 +3171,14 @@ safe_parse_urls <- function(url,
         port_handling = opts$port_handling,
         port_scheme = a$raw_scheme[gp]
       )
+    }
+    if (any(scheme_dropped)) {
+      gp_url <- clean_url[gp]
+      drop <- scheme_dropped & !is.na(gp_url)
+      gp_url[drop] <- substring(
+        gp_url[drop], nchar(gp_scheme[drop], type = "bytes") + 2L
+      )
+      clean_url[gp] <- gp_url
     }
   }
 

@@ -39,8 +39,11 @@ scheme fabricated for it.
 host-shaped input parses as "http://"; any other scheme-less input is
 not a URL and yields \code{"error"}.}
 \item{"none": \code{clean_url} carries the input's own scheme, and
-none for a scheme-less input.}
-\item{"strip": \code{clean_url} carries no scheme.}
+no scheme for a scheme-less host, except where rurl reads the input as
+scheme-bearing (a \code{host:port} form gets "http").}
+\item{"strip": \code{clean_url} drops the scheme of an http or https
+URL; any other scheme (\code{ftp:}, \code{file:}, \code{mailto:}) is
+kept.}
 \item{"http": \code{clean_url} presents an http or https URL as
 "http"; any other scheme (\code{ftp:}, \code{mailto:}) is kept.}
 \item{"https": \code{clean_url} presents an http or https URL as
