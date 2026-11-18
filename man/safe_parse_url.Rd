@@ -466,7 +466,11 @@ A named list with the following components:
 \item \code{scheme}: The scheme (e.g., "http", "https").
 \item \code{host}: The host (e.g., "www.example.com"). NA if the host becomes
 empty after processing.
-\item \code{port}: The port number.
+\item \code{port}: The port number, an R integer. RFC 3986 §3.2.3 allows
+any digit run, but a port above 2147483647 does not fit: under
+\code{url_standard = "rfc3986"} it makes an \code{http}, \code{https}, \code{ftp} or
+\code{ftps} URL a parse error, and a URL of any other scheme that parses
+reports \code{port} \code{NA} (a representation limit, RUL-036).
 \item \code{path}: The path component (e.g., "/path/to/resource").
 \item \code{query}: The query string (e.g., "name=value"); never
 percent-decoded. Under \code{url_standard = "whatwg"} it carries the
