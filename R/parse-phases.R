@@ -3278,13 +3278,11 @@
 
 # Phase 13 port output: WHATWG parsing nulls a port that equals the special
 # scheme's default, so the public parse-result `port` column must use that
-# effective value for parity. `port_handling = "keep"` is the explicit
-# non-parity escape hatch for callers that need to retain the syntactic port.
-.apply_port_output_policy_vec <- function(scheme, port, port_handling,
-                                          url_standard) {
-  if (is.null(port) ||
-      !.is_whatwg(url_standard) ||
-      identical(port_handling, "keep")) {
+# effective value for parity. `port_handling` never reaches this column: it
+# shapes `clean_url` only (ADR 0017, ADR 0020 D5; RURL-eglhowqo), so "keep"
+# spells the input's port there while the column stays null.
+.apply_port_output_policy_vec <- function(scheme, port, url_standard) {
+  if (is.null(port) || !.is_whatwg(url_standard)) {
     return(port)
   }
 

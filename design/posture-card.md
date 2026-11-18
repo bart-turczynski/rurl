@@ -64,9 +64,10 @@ prints exactly what a profile bundles.
   row carrying the URL's `parse_status` and `url_diagnostics`; and
   `host_encoding = "unicode"` (like `path_encoding = "decode"`) is a display
   form of a URL that parsed, which need not re-parse.
-- **Ungoverned is not selector-independent.** `port_handling` no-ops outside
-  WHATWG; `host_encoding` decodes only under `rfc3986`; `path_encoding`
-  switches encoder under WHATWG. A test comment once assumed otherwise
+- **Ungoverned is not selector-independent.** `host_encoding` decodes only
+  under `rfc3986`; `path_encoding` switches encoder under WHATWG.
+  (`port_handling` shapes `clean_url` only; the WHATWG `port` column nulls a
+  default port whatever its value, RURL-eglhowqo.) A test comment once assumed otherwise
   ([ADR 0016](adr/0016-null-freeze-binds-selector-caused-drift.md), now
   superseded by ADR 0020).
 - **The frame vs the payload.** A test that varies the input while holding

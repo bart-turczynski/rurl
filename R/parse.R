@@ -268,9 +268,11 @@
 #'   \itemize{
 #'     \item{"exclude": (Default) The port never appears in `clean_url`.}
 #'     \item{"strip_all": Explicit alias of "exclude".}
-#'     \item{"keep": Include the syntactic port when present, including a
-#'     default port under `url_standard = "whatwg"`. This is an explicit
-#'     non-parity override for callers that need the input's port spelling.}
+#'     \item{"keep": Include the syntactic port in `clean_url` when present,
+#'     including a default port under `url_standard = "whatwg"`, for callers
+#'     that need the input's port spelling. It shapes `clean_url` only: under
+#'     `"whatwg"` the `port` column stays `NA` for a default port (WHATWG URL
+#'     Standard, port state), as [get_port()] reports.}
 #'     \item{"strip_default": Keep only non-default ports (using the same
 #'     scheme-default table), independent of `url_standard`. Default-ness is
 #'     judged on the scheme the input was **parsed** with, never on the scheme
@@ -3072,7 +3074,7 @@ safe_parse_urls <- function(url,
   # `foo:` query gained the special-query `'` escape under "https"
   # (RURL-uxkksgtu).
   port_output <- .apply_port_output_policy_vec(
-    a$raw_scheme, a$raw_port, opts$port_handling, opts$url_standard
+    a$raw_scheme, a$raw_port, opts$url_standard
   )
   if (.is_whatwg(opts$url_standard)) {
     query_output <- .whatwg_query_percent_encode(
