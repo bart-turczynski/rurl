@@ -52,7 +52,7 @@ test_that("get_port is raw and unaffected by port_handling without selector", {
   }
 })
 
-test_that("whatwg parse output nulls default ports unless explicitly kept", {
+test_that("whatwg parse output nulls default ports under every port_handling", {
   u <- c(
     "http://example.com:80/path",
     "https://example.com:443/path",
@@ -61,17 +61,47 @@ test_that("whatwg parse output nulls default ports unless explicitly kept", {
     "ftps://example.com:990/path"
   )
 
+  # WHATWG URL Standard, port state: "Set url's port to null, if port is
+  # url's scheme's default port". port_handling shapes clean_url only
+  # (ADR 0017, ADR 0020 D5), so "keep" leaves the column alone
+  # (RURL-eglhowqo).
+  for (ph in c("exclude", "keep", "strip_default", "strip_all")) {
+    expect_identical(
+      safe_parse_urls(u, url_standard = "whatwg", port_handling = ph)$port,
+      c(NA_integer_, NA_integer_, NA_integer_, 8080L, 990L)
+    )
+  }
+  # RFC 3986 keeps the port as written (section 3.2.3; normalization to
+  # elide it is section 6.2.3, not parsing), under every port_handling.
+  for (ph in c("exclude", "keep", "strip_default", "strip_all")) {
+    expect_identical(
+      safe_parse_urls(u, url_standard = "rfc3986", port_handling = ph)$port,
+      c(80L, 443L, 21L, 8080L, 990L)
+    )
+  }
+})
+
+test_that("port_handling = 'keep' agrees with get_port() under whatwg", {
+  # The audit call (finding 9, RURL-eglhowqo).
+  u <- "http://example.com:80/"
   expect_identical(
-    safe_parse_urls(u, url_standard = "whatwg")$port,
-    c(NA_integer_, NA_integer_, NA_integer_, 8080L, 990L)
+    c(
+      safe_parse_urls(u, url_standard = "whatwg", port_handling = "keep")$port,
+      get_port(u, url_standard = "whatwg")
+    ),
+    c(NA_integer_, NA_integer_)
   )
+  # The dial still shapes clean_url: the input's port spelling survives there.
   expect_identical(
-    safe_parse_urls(u, url_standard = "whatwg", port_handling = "keep")$port,
-    c(80L, 443L, 21L, 8080L, 990L)
+    safe_parse_urls(u, url_standard = "whatwg", port_handling = "keep")$clean_url,
+    "http://example.com:80/"
   )
+  # Control: without the dial, :80 is null and :8080 is kept.
   expect_identical(
-    safe_parse_urls(u, url_standard = "rfc3986")$port,
-    c(80L, 443L, 21L, 8080L, 990L)
+    safe_parse_urls(
+      c(u, "http://example.com:8080/"), url_standard = "whatwg"
+    )$port,
+    c(NA_integer_, 8080L)
   )
 })
 
