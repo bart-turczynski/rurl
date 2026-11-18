@@ -16,6 +16,7 @@
 - `path_encoding = "decode"` decodes only unreserved and non-ASCII UTF-8 triplets; reserved ones such as `%2F` and `%3F` stay encoded (RFC 3986 §2.2) (`RURL-eokizmdi`).
 - Under `"rfc3986"`, `host_encoding = "idna"` and `"unicode"` keep a host whose triplets cannot safely decode (reserved, `%25`, control, invalid UTF-8) as written: `a%2Fb` no longer becomes `a/b` (RFC 3986 §2.2) (`RURL-rhwcrezl`).
 - `get_query()` keeps every ASCII percent-triplet outside the unreserved set (`%26`, `%20`, `%7C`) encoded in the string form, so `a=%26b&c=1` no longer reads as three parameters (RFC 3986 §2.2) (`RURL-utkkuuaz`).
+- `get_query()` returns `""` for a present but empty query (`https://example.com/?`) and keeps `NA` for an absent one; the `query` column of `safe_parse_urls()` stays `NA` (WHATWG URL, query state; RFC 3986 §3.4) (`RURL-qvbkrrbm`).
 - Under `"rfc3986"`, an IPvFuture host such as `http://[v1.x]/` parses as an IP literal, and `get_host_type()` reports it as `"ipvfuture"` (RFC 3986 §3.2.2) (`RURL-zniwbsdh`).
 - rurl now requires pslr 1.2.2 or later, which fixes every parse failing under a Turkish or Azerbaijani locale (`RURL-tnsrcqwi`).
 - `get_mailto_recipients()` gains a `mailto_local_part_raw` column before `mailto_local_part_form`, moving every later column one place right (`RURL-xwsyfkwh`).

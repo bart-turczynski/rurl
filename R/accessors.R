@@ -834,10 +834,17 @@ get_path <- function(
 #' the surviving params are selected first and only then rendered per
 #' `format`/`decode`. With `decode_plus = TRUE`, a `+` in a value becomes a
 #' space while `%20` stays encoded, so `a=x+y%20z` reads `a=x y%20z`.
-#' @return A character vector (format="string") or list (format="list").
+#' @return A character vector (format="string") or list (format="list"). In
+#' the string form a present but empty query (`https://example.com/?`) is
+#' `""` and an absent one (`https://example.com/`) is `NA`, as the WHATWG URL
+#' query state and RFC 3986 section 3.4 tell them apart; `query_handling =
+#' "drop"` gives `""` for any present query and `NA` for an absent one. The
+#' list form gives an empty list for both.
+#' The `query` column of [safe_parse_urls()] stays `NA` for both (ADR 0012).
 #' @export
 #' @examples
 #' get_query("http://example.com/path?a=1&b=2")
+#' get_query(c("http://example.com/?", "http://example.com/"))
 #' get_query("http://example.com/path?a=1&b=2", format = "list")
 #' # Drop trackers, keep contentful params:
 #' get_query(
@@ -905,7 +912,7 @@ get_query <- function(url,
                                  scheme_policy, scheme_acceptance,
                                  url_standard) {
   if (identical(format, "string")) {
-    raw <- .extract_from_urls(url, "query",
+    raw <- .query_with_empty_presence(url,
       protocol_handling = protocol_handling,
       scheme_policy = scheme_policy,
       scheme_acceptance = scheme_acceptance,
@@ -927,14 +934,46 @@ get_query <- function(url,
   lapply(raw, ._parse_query_string, decode = decode)
 }
 
+# The `query` column with a present but empty query read back as "" (the
+# WHATWG URL query state sets the query to "" on `?`; RFC 3986 sections 3.4
+# and 5.3 define the component whenever `?` is present). Stage A collapses ""
+# to NA through .blank_to_na(), so the column cannot tell `http://h/?` from
+# `http://h/`. The delimiter is recovered lexically, the way serialize_url()
+# recovers it (.fsss_source_lex(), which applies the WHATWG strips under
+# "whatwg" and reads a `?` after `#` as fragment), and only on the rows that
+# parsed and carry no query, so a row that failed to parse stays NA. The
+# record's own `query` column keeps NA for both (ADR 0012 D2).
+.query_with_empty_presence <- function(url, url_standard, ...) {
+  .extract_from_urls(url, NULL,
+    transform = function(cols) {
+      query <- cols[["query"]]
+      null_row <- attr(cols, "null_row")
+      query[null_row] <- NA_character_
+      probe <- which(is.na(query) & !null_row)
+      if (length(probe) > 0L) {
+        # Lex each distinct input once, as the parse cache parses it once.
+        probed <- url[probe]
+        distinct <- unique(probed)
+        kind <- .fsss_source_lex(
+          .prepare_url_input(distinct)$url, url_standard
+        )$query_kind[match(probed, distinct)]
+        query[probe[kind == "empty"]] <- ""
+      }
+      query
+    },
+    url_standard = url_standard,
+    ...
+  )
+}
+
 # The default decode: the RURL-eokizmdi rule (.path_decode_readable_one()), so
 # a reserved triplet such as %26 stays encoded instead of becoming a delimiter.
 .decode_raw_query_strings <- function(raw) {
   vapply(
     raw,
     function(q) {
-      if (is.na(q)) {
-        NA_character_
+      if (is.na(q) || !nzchar(q)) {
+        q
       } else {
         tryCatch(.path_decode_readable_one(q), error = function(e) q)
       }
@@ -950,7 +989,14 @@ get_query <- function(url,
                                    empty_param_handling, decode_plus,
                                    scheme_policy, scheme_acceptance,
                                    url_standard) {
-  raw <- .extract_from_urls(url, "query",
+  # A bare `?` reads as "" in the string form, as any present query does
+  # under "drop". The list form gives list() either way.
+  extract <- if (identical(format, "string")) {
+    .query_with_empty_presence
+  } else {
+    function(url, ...) .extract_from_urls(url, "query", ...)
+  }
+  raw <- extract(url,
     protocol_handling = protocol_handling,
     scheme_policy = scheme_policy,
     scheme_acceptance = scheme_acceptance,
