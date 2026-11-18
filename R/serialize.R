@@ -94,12 +94,37 @@
   .bytes_cut(s, 1L, pos - 1L)
 }
 
+# The port of a userinfo-free authority AS SPELLED: the run after the ":" that
+# `.fsss_host_slice()` drops, "" for an empty port (`h:`), NA for no ":" at all.
+# An IP literal's port follows its "]"; an unterminated "[" has none to find.
+# The parse keeps only the number (`080` and `80` are one port, and `h:` has
+# none), so this is the one place `form = "source"` can read the spelling
+# back from (RFC 3986 section 5.3; RURL-zrvhcsud).
+.fsss_port_slice <- function(s) {
+  if (startsWith(s, "[")) {
+    close <- .bytes_locate(s, "]", fixed = TRUE)[[1L, "start"]]
+    if (is.na(close)) {
+      return(NA_character_)
+    }
+    rest <- .bytes_cut(s, close + 1L, .Machine$integer.max)
+    if (!startsWith(rest, ":")) {
+      return(NA_character_)
+    }
+    return(.bytes_cut(rest, 2L, .Machine$integer.max))
+  }
+  pos <- .last_byte_index(s, ":")
+  if (pos == 0L) {
+    return(NA_character_)
+  }
+  .bytes_cut(s, pos + 1L, .Machine$integer.max)
+}
+
 .fsss_source_lex <- function(url, url_standard) {
   n <- length(url)
   if (n == 0L) {
     return(list(
       query_kind = character(0), fragment_kind = character(0),
-      userinfo = character(0), host = character(0)
+      userinfo = character(0), host = character(0), port = character(0)
     ))
   }
   u <- ifelse(is.na(url), "", as.character(url))
@@ -182,6 +207,7 @@
   # itself under `LC_ALL=C`.
   userinfo <- rep(NA_character_, n)
   host <- rep(NA_character_, n)
+  port <- rep(NA_character_, n)
   has_auth <- !is.na(authority)
   if (any(has_auth)) {
     auth <- authority[has_auth]
@@ -197,12 +223,16 @@
     )
     userinfo[has_auth] <- slice
 
-    host[has_auth] <- vapply(
+    hostport <- vapply(
       seq_along(auth),
-      function(i) {
-        .fsss_host_slice(.bytes_cut(auth[i], at[i] + 1L, .Machine$integer.max))
-      },
+      function(i) .bytes_cut(auth[i], at[i] + 1L, .Machine$integer.max),
       character(1), USE.NAMES = FALSE
+    )
+    host[has_auth] <- vapply(
+      hostport, .fsss_host_slice, character(1), USE.NAMES = FALSE
+    )
+    port[has_auth] <- vapply(
+      hostport, .fsss_port_slice, character(1), USE.NAMES = FALSE
     )
   }
 
@@ -210,7 +240,8 @@
     query_kind = .presence_kind(query),
     fragment_kind = .presence_kind(fragment),
     userinfo = userinfo,
-    host = host
+    host = host,
+    port = port
   )
 }
 
@@ -355,6 +386,24 @@
     host[take] <- src_host[take]
   }
 
+  # The port AS SPELLED, read by `form = "source"` alone (RUL-035): section 5.3
+  # appends the authority as written, so `:080` stays `:080` and an empty
+  # port keeps its ":". Taken only where the slice and the parse name the same
+  # port -- an empty slice where the parse has none, or digits of the parsed
+  # value -- on the same reasoning as the host above; every other row keeps
+  # the parsed port. The `port` field the other surfaces read does not move.
+  source_port <- as.character(port)
+  if (!is_whatwg) {
+    src_port <- lex$port
+    digits <- !is.na(src_port) &
+      grepl("^[0-9]+$", src_port, perl = TRUE, useBytes = TRUE)
+    take_port <- (is.na(port) & !is.na(src_port) & !nzchar(src_port)) |
+      (!is.na(port) & digits &
+        suppressWarnings(as.numeric(src_port)) == as.numeric(port))
+    take_port <- !is.na(take_port) & take_port
+    source_port[take_port] <- src_port[take_port]
+  }
+
   # Under "keep" a `//` row was parsed behind a stand-in `http:` the source
   # never spelled, and the parse surface already reports its scheme as NA
   # (Phase 13). The record says the same, so the key frames no scheme for a
@@ -385,7 +434,10 @@
     fragment = a$raw_fragment,
     fragment_kind = lex$fragment_kind,
     port = port,
-    # The port AS SPELLED, before the WHATWG default-port elision above. Surface
+    # The port as the source wrote it, under `rfc3986` only; read by `form =
+    # "source"` alone, like `source_scheme`.
+    source_port = source_port,
+    # The parsed port, before the WHATWG default-port elision above. Surface
     # (b) must not use it -- nulling a special scheme's default port is a WHATWG
     # PARSE fact and the serializer emits what it is handed. Surface (e) must:
     # key-policy v1 normalizes ONLY http:80 and https:443, so `ftp://h:21/` and
@@ -649,7 +701,12 @@ serialize_url <- function(url,
       path = slice(rec$path), rfc_path_form = slice(rec$rfc_path_form),
       query = slice(rec$query), query_kind = slice(rec$query_kind),
       fragment = slice(rec$fragment), fragment_kind = slice(rec$fragment_kind),
-      port = slice(rec$port), form = form
+      # Section 5.3 appends the authority as written: `source` keeps the
+      # port's spelling, `normalized` the parsed number (RUL-035).
+      port = slice(
+        if (identical(form, "source")) rec$source_port else rec$port
+      ),
+      form = form
     )
   }
   out

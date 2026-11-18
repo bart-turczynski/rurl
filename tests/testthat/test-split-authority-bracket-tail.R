@@ -96,9 +96,12 @@ test_that("rfc3986: a tail after the IP-literal is a grammar failure", {
       info = form
     )
   }
+  # The source form writes the empty port's ":" back (RFC 3986 section 5.3,
+  # RUL-035); the normalized form drops it (section 3.2.3).
+  expect_identical(serialize_url(good, standard = "rfc3986"), good)
   expect_identical(
-    serialize_url(good, standard = "rfc3986"),
-    c("foo://[::1]:80/", "foo://[::1]/", "foo://[::1]/", "foo://[::1]")
+    serialize_url(good, standard = "rfc3986", form = "normalized"),
+    c("foo://[::1]:80/", "foo://[::1]/", "foo://[::1]/", "foo://[::1]/")
   )
 })
 
