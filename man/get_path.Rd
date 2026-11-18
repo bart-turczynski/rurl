@@ -58,25 +58,11 @@ component, and \code{url_standard} governs it (ADR 0020 D4a): "lower" and
 \code{path_normalization} but "dot_segments". Use \code{get_clean_url()} for a
 case-folded or slash-collapsed cleaned URL.}
 
-\item{trailing_slash_handling}{A character string specifying how to handle
-trailing slashes in the path component of the cleaned URL. Defaults to
-"none".
-\itemize{
-\item{"none": (Default) No specific handling is applied. Path remains as
-is after initial parsing.}
-\item{"keep": Ensures a trailing slash. If a path exists and doesn't end
-with one, it's added. If path is just "/", it's kept.}
-\item{"strip": Removes a trailing slash if present, unless the path is
-solely "/".}
-}}
-
-\item{index_page_handling}{A character string specifying how to handle
-index/default pages. Defaults to "keep".
-\itemize{
-\item{"keep": (Default) Leave index/default page segments untouched.}
-\item{"strip": Remove a trailing index.* or default.* segment
-(case-insensitive).}
-}}
+\item{trailing_slash_handling, index_page_handling}{Accepted for
+compatibility; neither changes the returned path. They shape \code{clean_url}
+only, since \verb{/dir} and \verb{/dir/} are different paths (WHATWG URL path state,
+RFC 3986 section 6.2.3): \code{get_path("https://example.com/dir/", trailing_slash_handling = "strip")} is \code{"/dir/"}. Use \code{get_clean_url()} for
+the path with a trailing slash or index page removed.}
 
 \item{path_normalization, path_normalisation}{How to normalize path
 structure. Defaults to "none". \code{path_normalisation} is the British

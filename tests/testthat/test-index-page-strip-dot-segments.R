@@ -46,10 +46,18 @@ test_that("no stripped path escapes above the document root", {
     "http://example.com/"
   )
   expect_identical(
+    get_clean_url("http://example.com/a/b/../../../index.html",
+      index_page_handling = "strip"
+    ),
+    "http://example.com/"
+  )
+  # The dial shapes clean_url only: the path column is the parsed path, dot
+  # segments resolved by the WHATWG path state (RURL-sudxboym).
+  expect_identical(
     get_path("http://example.com/a/b/../../../index.html",
       index_page_handling = "strip"
     ),
-    "/"
+    "/index.html"
   )
 })
 
@@ -70,12 +78,15 @@ test_that("path_normalization = 'none' still means none for visible dots", {
   # normalization choice to make; resolving them would be an unrequested
   # normalization. Only a dot segment the strip left in FINAL position is
   # resolved.
+  # The strip reaches clean_url only (RURL-sudxboym), so it is read there.
   rs <- function(u) {
     safe_parse_urls(u, profile = "rfc-syntax",
-                    index_page_handling = "strip")$path
+                    index_page_handling = "strip")$clean_url
   }
-  expect_identical(rs("http://example.com/a/./b/index.html"), "/a/./b")
-  expect_identical(rs("http://example.com/a/../b/index.html"), "/a/../b")
+  expect_identical(rs("http://example.com/a/./b/index.html"),
+                   "http://example.com/a/./b")
+  expect_identical(rs("http://example.com/a/../b/index.html"),
+                   "http://example.com/a/../b")
 })
 
 test_that("index_page_handling = 'keep' output is untouched", {

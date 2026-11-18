@@ -109,8 +109,10 @@ only \code{"lower_host"} is accepted. \code{profile = "rfc-syntax"} takes any
 value.}
 
 \item{trailing_slash_handling}{A character string specifying how to handle
-trailing slashes in the path component of the cleaned URL. Defaults to
-"none".
+trailing slashes in the path of \code{clean_url}. Defaults to "none". It
+shapes \code{clean_url} only: the \code{path} column is the input's path, since
+\verb{/dir} and \verb{/dir/} are different paths (WHATWG URL path state, RFC 3986
+section 6.2.3).
 \itemize{
 \item{"none": (Default) No specific handling is applied. Path remains as
 is after initial parsing.}
@@ -121,7 +123,8 @@ solely "/".}
 }}
 
 \item{index_page_handling}{A character string specifying how to handle
-index/default pages. Defaults to "keep".
+index/default pages in \code{clean_url}. Defaults to "keep". Like
+\code{trailing_slash_handling}, it never changes the \code{path} column.
 \itemize{
 \item{"keep": (Default) Leave index/default page segments untouched.}
 \item{"strip": Remove a trailing index.* or default.* segment
