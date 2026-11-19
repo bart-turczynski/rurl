@@ -86,6 +86,8 @@ Before fixing, name the layer; three tickets were reverted for mixing them.
 | Transport | 16-bit port ceiling | never a syntax gate under `rfc3986` |
 | Presentation | `host_encoding`, `path_encoding`, `format_url` | an orthogonal dial (ADR 0011), never the parse record |
 
+Exception to the transport row: the `port` column is an R integer, so under `rfc3986` a port above 2147483647 is a parse error on every route, a representation limit the `port-out-of-integer-range` diagnostic names (RUL-036).
+
 ## Definition of done for a conformance change
 
 - The new test is shown **red at the pre-fix baseline** under the named posture.
