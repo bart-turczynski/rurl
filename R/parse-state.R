@@ -1778,5 +1778,36 @@
   }
 
   out$ok <- out$ok & gate_ok
+  # RUL-036: under rfc3986 a port above 2^31 - 1 is a parse error here as on
+  # the web route. RFC 3986 sec 3.2.3 allows any `*DIGIT`, but the `port`
+  # column is an R integer: accepting the row reported an `NA` port that
+  # `serialize_url()` and `clean_url` then dropped, naming a different URL
+  # (ADR 0020 D1). A declared representation limit, not a syntax verdict;
+  # `port_overflow` lets the diagnostics name it.
+  out$port_overflow <- rep(FALSE, n)
+  if (identical(url_standard, "rfc3986")) {
+    out$port_overflow <- gp & .port_out_of_integer_range(out$port)
+    out$ok <- out$ok & !out$port_overflow
+  }
+  out
+}
+
+# TRUE where `port` is a digit run whose value exceeds `.Machine$integer.max`
+# (2147483647), the largest port the `integer` `port` column holds (RUL-036).
+# Leading zeros go first and a run longer than ten digits is over outright, so
+# only a ten-digit run reaches `as.numeric()`, which holds it exactly. NA, ""
+# and non-digit runs are FALSE: they are not this limit.
+.port_out_of_integer_range <- function(port) {
+  digits <- !is.na(port) & grepl("^[0-9]+$", port)
+  out <- rep(FALSE, length(port))
+  if (!any(digits)) {
+    return(out)
+  }
+  run <- sub("^0+", "", port[digits])
+  len <- nchar(run, type = "bytes")
+  over <- len > 10L
+  ten <- len == 10L
+  over[ten] <- as.numeric(run[ten]) > .Machine$integer.max
+  out[digits] <- over
   out
 }

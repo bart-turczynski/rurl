@@ -1154,9 +1154,9 @@ get_fragment <- function(url, protocol_handling = "keep",
 #' \emph{not part of the parsed URL} (the standard discards it during parsing),
 #' so \code{"http://example.com:80/"} reports \code{NA} rather than \code{80}.
 #' Under \code{url_standard = "rfc3986"} the written port is reported as-is,
-#' up to 2147483647, the largest R integer: a larger port is \code{NA}, and
-#' the whole URL a parse error for \code{http}, \code{https}, \code{ftp} and
-#' \code{ftps} (RUL-036). This is distinct from \code{port_handling}, a
+#' up to 2147483647, the largest R integer: a larger port makes the URL a
+#' parse error, so \code{NA} (RUL-036). This is distinct from
+#' \code{port_handling}, a
 #' presentation dial that governs whether a port is rendered into
 #' \code{clean_url}; the two are independent.
 #'
@@ -1533,21 +1533,29 @@ get_host_type <- function(url, url_standard = "whatwg",
 #' plain scalar-per-URL vector (see \emph{Value}). \code{parse_status} stays
 #' coarse; diagnostics are never encoded into it.
 #'
-#' One token reports why a URL \emph{failed} rather than a fact about one that
-#' parsed: \code{unicode-outside-rfc3986-uri}. Under \code{url_standard =
-#' "rfc3986"} a directly written non-ASCII character in any component is a
-#' parse error, because RFC 3986 admits only US-ASCII (section 2) and writes
-#' non-ASCII data as percent-encoded UTF-8 octets (section 2.5); a host is an
-#' ASCII \code{reg-name} (section 3.2.2). Write \code{ä} as \code{\%C3\%A4},
-#' or parse Unicode input with \code{url_standard = "whatwg"}. rurl has no
-#' RFC 3987 (IRI) mode. The token fires only where that advice holds: the
-#' row's twin, each non-ASCII octet written as its \code{\%XX} triplet, parses
-#' under the same options. A row that also fails for another reason (a
-#' scheme-less input that is not host-like, \code{scheme_policy =
-#' "require"}, a scheme the \code{"web"} acceptance refuses, an ASCII
-#' grammar fault, or a row led by a non-ASCII character, whose twin then has
-#' no scheme) reports no token. A row that reports this token reports it
-#' alone, under either \code{scheme_acceptance}.
+#' Two tokens report why a URL \emph{failed} rather than a fact about one that
+#' parsed. The first is \code{unicode-outside-rfc3986-uri}. Under
+#' \code{url_standard = "rfc3986"} a directly written non-ASCII character in any
+#' component is a parse error, because RFC 3986 admits only US-ASCII (section 2)
+#' and writes non-ASCII data as percent-encoded UTF-8 octets (section 2.5); a
+#' host is an ASCII \code{reg-name} (section 3.2.2). Write \code{ä} as
+#' \code{\%C3\%A4}, or parse Unicode input with \code{url_standard = "whatwg"}.
+#' rurl has no RFC 3987 (IRI) mode. The token fires only where that advice
+#' holds: the row's twin, each non-ASCII octet written as its \code{\%XX}
+#' triplet, parses under the same options. A row that also fails for another
+#' reason (a scheme-less input that is not host-like, \code{scheme_policy =
+#' "require"}, a scheme the \code{"web"} acceptance refuses, an ASCII grammar
+#' fault, or a row led by a non-ASCII character, whose twin then has no scheme)
+#' reports no token. A row that reports this token reports it alone, under
+#' either \code{scheme_acceptance}.
+#'
+#' The second is \code{port-out-of-integer-range}. RFC 3986 section 3.2.3
+#' allows a port of any length, but the \code{port} column is an R integer,
+#' so under \code{url_standard = "rfc3986"} a port above 2147483647 makes
+#' the URL a parse error on every scheme (RUL-036): a representation limit,
+#' not a syntax verdict. It fires only where the port alone failed the row
+#' (the twin with that port written \code{0} parses under the same options),
+#' and alone, under either \code{scheme_acceptance}.
 #'
 #' @section Selected facts, not a conformance oracle: The diagnostics are
 #'   deliberately a \strong{selected} set of facts, \strong{not} a complete
@@ -1731,6 +1739,10 @@ get_host_type <- function(url, url_standard = "whatwg",
 #'     \item \code{non-default-port} --- a port is present and is not the
 #'       scheme's default (including any port on a scheme with no defined
 #'       default).
+#'     \item \code{port-out-of-integer-range} --- the rejection reason for a
+#'       URL that failed under \code{"rfc3986"} only because its port is
+#'       above 2147483647, the largest R integer (RUL-036). Both acceptance
+#'       postures; \code{"rfc3986"} only. See the description above.
 #'   }
 #'
 #'   \strong{Input shape --- WHATWG cleanup.} All three are \code{"whatwg"}

@@ -127,9 +127,9 @@ Under \code{url_standard = "whatwg"} a port equal to the scheme's default is
 \emph{not part of the parsed URL} (the standard discards it during parsing),
 so \code{"http://example.com:80/"} reports \code{NA} rather than \code{80}.
 Under \code{url_standard = "rfc3986"} the written port is reported as-is,
-up to 2147483647, the largest R integer: a larger port is \code{NA}, and
-the whole URL a parse error for \code{http}, \code{https}, \code{ftp} and
-\code{ftps} (RUL-036). This is distinct from \code{port_handling}, a
+up to 2147483647, the largest R integer: a larger port makes the URL a
+parse error, so \code{NA} (RUL-036). This is distinct from
+\code{port_handling}, a
 presentation dial that governs whether a port is rendered into
 \code{clean_url}; the two are independent.
 }

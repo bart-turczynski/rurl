@@ -38,6 +38,9 @@
   "encoded-reserved-path-byte",
   "explicit-default-port",
   "non-default-port",
+  # A failed row's reason, not a fact about a parsed one: under rfc3986 a port
+  # above 2147483647, which the `integer` `port` column cannot hold (RUL-036).
+  "port-out-of-integer-range",
   "invalid-reverse-solidus",
   "control-char-stripped",
   "leading-trailing-stripped",
@@ -53,8 +56,9 @@
   # NEVER implies conformance (D5). All fire only under scheme_acceptance =
   # "general" (the general-parser branch), except the two WHATWG-generic
   # names and `unicode-outside-rfc3986-uri`, which RUL-030 (2026-10-12)
-  # repurposed as the rfc3986 rejection reason on both acceptance routes and
-  # the one token that fires on a failed row. The WHATWG validation-error
+  # repurposed as the rfc3986 rejection reason on both acceptance routes and,
+  # with `port-out-of-integer-range` (RUL-036), one of the two tokens that
+  # fire on a failed row. The WHATWG validation-error
   # names are WHATWG-verbatim (deliberate mixed case for `invalid-URL-unit`).
   # The per-scheme facts below are rurl-coined kebab tokens (no reserved names
   # exist for them in ADR 0012 or the design PRDs; the email PRD's
@@ -127,6 +131,31 @@
     diag[mask] <- lapply(diag[mask], c, token)
   }
   diag
+}
+
+# The twin of each URL whose authority port is a digit run above 2147483647,
+# with that port written `0`; NA for every other URL (RUL-036). The authority
+# follows `//` (after an optional scheme), its userinfo ends at the one "@"
+# rfc3986 admits, and its host is a bracketed IP literal or a run with no ":".
+# Read in bytes (ADR 0019). `port-out-of-integer-range` fires where the twin
+# parses, so the token names the port only when the port alone failed the row.
+.port_overflow_twin <- function(url) {
+  out <- rep(NA_character_, length(url))
+  re <- paste0(
+    "(?s)^((?:[A-Za-z][A-Za-z0-9+.-]*:)?//(?:[^/?#@]*@)?",
+    "(?:\\[[^\\]/?#]*\\]|[^/?#:@\\[\\]]*)):([0-9]+)([/?#].*)?\\z"
+  )
+  hit <- .bytes_detect(url, re)
+  hit[is.na(hit)] <- FALSE
+  if (!any(hit)) {
+    return(out)
+  }
+  port <- .bytes_replace(url[hit], re, "\\2")
+  idx <- which(hit)[.port_out_of_integer_range(port)]
+  if (length(idx) > 0L) {
+    out[idx] <- .bytes_replace(url[idx], re, "\\1:0\\3")
+  }
+  out
 }
 
 # --- Emit seam ---------------------------------------------------------------
@@ -437,7 +466,8 @@
   # REASON of a failed one. Under `rfc3986` a directly-written non-ASCII code
   # point is a parse error (RFC 3986 sections 2, 2.5, 3.2.2), so the row is
   # null and every other token above is suppressed; this one names why, on
-  # both acceptance routes. It is the one token that fires on a failed row.
+  # both acceptance routes. With `port-out-of-integer-range` below, it is one
+  # of the two tokens that fire on a failed row.
   # The name is kept because callers already match on it. The gate returns
   # `$diagnostic` for every decodable row carrying non-ASCII; keyed to the
   # failure so it never contradicts `parse_status`.
@@ -463,6 +493,25 @@
       rescued <- logical(n)
       rescued[cand[!twin_null]] <- TRUE
       diag <- .diag_add(diag, rescued, "unicode-outside-rfc3986-uri")
+    }
+
+    # `port-out-of-integer-range` (RUL-036): the second token on a failed
+    # row. RFC 3986 sec 3.2.3 allows any `*DIGIT` port, but the `port` column
+    # is an R integer, so a port above 2147483647 is a parse error on every
+    # rfc3986 route: a declared representation limit, not a syntax verdict,
+    # which is why the row says so. Keyed like the token above: it fires only
+    # where the port alone failed the row, i.e. the twin with that port
+    # written `0` parses under the same options.
+    twin <- .port_overflow_twin(url)
+    cand <- which(!live & !is.na(twin))
+    if (length(cand) > 0L) {
+      twin_null <- attr(._parse_stage_a_vec(twin[cand], opts), "null_row")
+      if (is.null(twin_null)) {
+        twin_null <- rep(FALSE, length(cand))
+      }
+      limited <- logical(n)
+      limited[cand[!twin_null]] <- TRUE
+      diag <- .diag_add(diag, limited, "port-out-of-integer-range")
     }
   }
 

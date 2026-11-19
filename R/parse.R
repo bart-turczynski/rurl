@@ -413,9 +413,9 @@
 #'     empty after processing.
 #'     \item `port`: The port number, an R integer. RFC 3986 §3.2.3 allows
 #'     any digit run, but a port above 2147483647 does not fit: under
-#'     `url_standard = "rfc3986"` it makes an `http`, `https`, `ftp` or
-#'     `ftps` URL a parse error, and a URL of any other scheme that parses
-#'     reports `port` `NA` (a representation limit, RUL-036).
+#'     `url_standard = "rfc3986"` it makes the URL a parse error whatever
+#'     its scheme, a representation limit that [get_url_diagnostics()]
+#'     names `port-out-of-integer-range` (RUL-036).
 #'     \item `path`: The path component (e.g., "/path/to/resource").
 #'     \item `query`: The query string (e.g., "name=value"); never
 #'     percent-decoded. Under `url_standard = "whatwg"` it carries the
