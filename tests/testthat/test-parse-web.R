@@ -145,7 +145,8 @@ test_that("port_range = 'unbounded' drops the bound, not the digits", {
   # the identity record types its port `integer(1)`: accepting it made the parse
   # `ok` while the port silently VANISHED from the round-trip. This is a
   # representation limit, not the transport bound under another name; RUL-036
-  # keeps it as a declared deviation from RFC 3986 sec 3.2.3 (`*DIGIT`).
+  # makes it a declared deviation from RFC 3986 sec 3.2.3 (`*DIGIT`) on every
+  # rfc3986 route.
   expect_null(pu("http://example.com:2147483648/"))
   expect_null(pu("http://example.com:99999999999999999999/"))
   # Non-digits are still non-digits whatever the range.
@@ -172,31 +173,69 @@ test_that("the port axis follows the selector, losslessly", {
   expect_identical(serialize_url(u, standard = "rfc3986", form = "source"), u)
 })
 
-test_that("a port above 2^31 - 1 is a declared representation limit", {
+test_that("a port above 2^31 - 1 fails every rfc3986 route, with a token", {
   # Standards literal audit 2026-10-28, finding 14: RFC 3986 sec 3.2.3 allows
-  # any `*DIGIT` port, but the `port` column is an R integer. The owner kept
-  # the column type and today's behavior (RUL-036, RURL-halyfkxf): the web
-  # route refuses the row, the general route parses it with an `NA` port.
-  u <- c("http://example.com:2147483648/", "foo://h:99999999999/")
-  r <- safe_parse_urls(u, url_standard = "rfc3986",
-                       scheme_acceptance = "general")
-  expect_identical(r$parse_status, c("error", "ok"))
-  expect_identical(r$port, c(NA_integer_, NA_integer_))
-  expect_identical(r$host, c(NA_character_, "h"))
+  # any `*DIGIT` port, but the `port` column is an R integer. RUL-036
+  # (RURL-halyfkxf): under rfc3986 such a port is a parse error on every
+  # route, a declared representation limit, and the failed row carries
+  # `port-out-of-integer-range`. Before it the general and `file:` routes
+  # parsed the row `ok` with an `NA` port that `serialize_url()` and
+  # `clean_url` then dropped, naming a different URL.
+  tok <- "port-out-of-integer-range"
+  big <- c(":2147483648", ":99999999999")
+  general <- c("http://example.com", "https://example.com", "ftp://example.com",
+               "ftps://example.com", "foo://h", "ws://example.com",
+               "wss://example.com", "file://example.com")
+  web <- c("http://example.com", "https://example.com", "ftp://example.com",
+           "ftps://example.com", "file://example.com")
+  routes <- list(general = general, web = web)
+  for (acc in names(routes)) {
+    for (b in big) {
+      u <- paste0(routes[[acc]], b, "/")
+      r <- safe_parse_urls(u, url_standard = "rfc3986",
+                           scheme_acceptance = acc)
+      expect_identical(r$parse_status, rep("error", length(u)), label = acc)
+      expect_identical(r$port, rep(NA_integer_, length(u)), label = acc)
+      expect_identical(
+        get_url_diagnostics(u, url_standard = "rfc3986",
+                            scheme_acceptance = acc),
+        rep(list(tok), length(u)), label = acc
+      )
+    }
+    # The largest R integer is still a port on every route.
+    edge <- paste0(routes[[acc]], ":2147483647/")
+    r <- safe_parse_urls(edge, url_standard = "rfc3986",
+                         scheme_acceptance = acc)
+    # (`ok-ftp` is the ftp/ftps success status.)
+    expect_true(all(startsWith(r$parse_status, "ok")), label = acc)
+    expect_identical(r$port, rep(2147483647L, length(edge)), label = acc)
+    expect_false(any(vapply(
+      get_url_diagnostics(edge, url_standard = "rfc3986",
+                          scheme_acceptance = acc),
+      function(t) tok %in% t, logical(1)
+    )), label = acc)
+  }
+  # The audit call itself, and the scalar surface.
   expect_identical(
-    get_port(u, url_standard = "rfc3986", scheme_acceptance = "general"),
-    c(NA_integer_, NA_integer_)
+    safe_parse_urls(c("http://example.com:2147483648/", "foo://h:99999999999/"),
+                    url_standard = "rfc3986",
+                    scheme_acceptance = "general")$parse_status,
+    c("error", "error")
   )
-  # The general route's port does not survive the round-trip.
+  expect_null(safe_parse_url("foo://h:99999999999/", url_standard = "rfc3986",
+                             scheme_acceptance = "general"))
+  # A row that also fails for another reason names no port limit.
   expect_identical(
-    serialize_url(u[[2]], standard = "rfc3986", form = "source"), "foo://h/"
+    get_url_diagnostics("foo://h :2147483648/", url_standard = "rfc3986",
+                        scheme_acceptance = "general"),
+    character(0)
   )
-  # The largest R integer is still a port on the web route.
-  edge <- safe_parse_urls("http://example.com:2147483647/",
-                          url_standard = "rfc3986",
-                          scheme_acceptance = "general")
-  expect_identical(edge$parse_status, "ok")
-  expect_identical(edge$port, 2147483647L)
+  # whatwg is unmoved: its port state already fails above 65535, tokenless.
+  w <- safe_parse_urls(c("http://example.com:2147483648/", "foo://h:99999/"),
+                       url_standard = "whatwg", scheme_acceptance = "general")
+  expect_identical(w$parse_status, c("error", "error"))
+  expect_false(tok %in% get_url_diagnostics("http://example.com:2147483648/",
+                                            url_standard = "whatwg"))
 })
 
 test_that("userinfo splits at the first colon and admits at most one '@'", {
